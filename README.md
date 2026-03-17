@@ -26,10 +26,10 @@ python search_random_query.py
 ## Project Structure
 ```text
 .
-├── build_index.py
-├── build_queries.py
-├── search_random_query.py
-├── cisi_index/   # ignored (generated files)
+├── build_index.py         # build inverted index
+├── build_queries.py       # parse and preprocess queries
+├── search_random_query.py # run search with random query
+├── cisi_index/            # generated index files (ignored)
 ```
 
 ## Result & Analysis
