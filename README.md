@@ -24,11 +24,13 @@ python search_random_query.py
 ```
 
 ## Project Structure
+```text
 .
 ├── build_index.py
 ├── build_queries.py
 ├── search_random_query.py
 ├── cisi_index/   # ignored (generated files)
+```
 
 ## Result & Analysis
 - Relevant documents are generally retrieved successfully
