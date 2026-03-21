@@ -70,9 +70,9 @@ def parse_cisi_rel(file_path: str) -> Dict[int, Set[int]]:
     Parse CISI.REL file into:
         {query_id: {relevant_doc_ids}}
 
-    Expected CISI.REL line format:
-        query_id  something  doc_id  ...
-    In the common CISI format, query_id is column 0 and doc_id is column 2.
+    CISI.REL format:
+        column 0: query_id
+        column 1: document_id
     """
     relevance: Dict[int, Set[int]] = {}
 
@@ -83,11 +83,11 @@ def parse_cisi_rel(file_path: str) -> Dict[int, Set[int]]:
                 continue
 
             parts = line.split()
-            if len(parts) < 3:
+            if len(parts) < 2:
                 continue
 
             query_id = int(parts[0])
-            doc_id = int(parts[2])
+            doc_id = int(parts[1])
 
             if query_id not in relevance:
                 relevance[query_id] = set()
