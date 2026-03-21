@@ -46,5 +46,5 @@ python search_random_query.py
 - Semantic search
 
 ## Author
-- Lee Jiho
-- Choi Junwon
+- Lee Jiho - [2j2h5](https://github.com/2j2h5)
+- Choi Junwon - [junwon4158](https://github.com/junwon4158)
