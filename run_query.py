@@ -3,7 +3,7 @@ import os
 import pickle
 import random
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 # Add project root to Python path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -12,6 +12,7 @@ from ir.preprocessors.tokenizer import Tokenizer
 from ir.indexing.inverted_index import InvertedIndex
 from ir.weighting.tfidf import TFIDFWeighter
 from ir.models.vector_space_model import VectorSpaceModel
+from ir.models.boolean_model import BooleanModel
 
 
 def load_index(index_path: str) -> InvertedIndex:
@@ -66,6 +67,7 @@ def parse_cisi_queries(file_path: str) -> Dict[int, str]:
 
 
 def build_model(
+    model_name: str,
     index: InvertedIndex,
     title_weight: float = 2.0,
     body_weight: float = 1.0,
@@ -74,32 +76,43 @@ def build_model(
     remove_numbers: bool = False,
     remove_stopwords: bool = False,
     min_token_length: int = 1,
-) -> VectorSpaceModel:
+):
     """
-    Build a VectorSpaceModel from a loaded index.
+    Build a retrieval model from a loaded index.
+    Supports:
+    - vsm
+    - boolean
     """
     tokenizer = Tokenizer(
         lowercase=True,
         remove_numbers=remove_numbers,
         remove_stopwords=remove_stopwords,
-        stopwords=None,
         min_token_length=min_token_length,
     )
 
-    weighter = TFIDFWeighter(
-        title_weight=title_weight,
-        body_weight=body_weight,
-        use_log_tf=use_log_tf,
-        smooth_idf=smooth_idf,
-    )
+    if model_name == "vsm":
+        weighter = TFIDFWeighter(
+            title_weight=title_weight,
+            body_weight=body_weight,
+            use_log_tf=use_log_tf,
+            smooth_idf=smooth_idf,
+        )
 
-    model = VectorSpaceModel(
-        index=index,
-        tokenizer=tokenizer,
-        weighter=weighter,
-    )
-    model.build()
-    return model
+        model = VectorSpaceModel(
+            index=index,
+            tokenizer=tokenizer,
+            weighter=weighter,
+        )
+        model.build()
+        return model
+
+    if model_name == "boolean":
+        return BooleanModel(
+            index=index,
+            tokenizer=tokenizer,
+        )
+
+    raise ValueError(f"Unsupported model: {model_name}")
 
 
 def resolve_query(args) -> Tuple[str, str]:
@@ -153,8 +166,9 @@ def print_results(
     results: List[Tuple[int, float]],
     index: InvertedIndex,
     query: str,
-    model: VectorSpaceModel,
+    model,
     query_source: str,
+    model_name: str,
     show_explain: bool = False,
     show_body: bool = False,
 ) -> None:
@@ -164,6 +178,7 @@ def print_results(
     print("=" * 72)
     print(f"Query       : {query}")
     print(f"Query Source: {query_source}")
+    print(f"Model       : {model_name}")
     print("=" * 72)
 
     if not results:
@@ -176,13 +191,16 @@ def print_results(
 
         print(f"\nRank   : {rank}")
         print(f"Doc ID : {doc_id}")
-        print(f"Score  : {score:.6f}")
+
+        if model_name == "vsm":
+            print(f"Score  : {score:.6f}")
+
         print(f"Title  : {title}")
 
         if show_body:
             print(f"Snippet: {format_snippet(body)}")
 
-        if show_explain:
+        if show_explain and model_name == "vsm":
             contributions = model.explain(query, doc_id)
             if contributions:
                 print("Term Contributions:")
@@ -198,7 +216,7 @@ def print_results(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run a query using TF-IDF + cosine similarity VSM."
+        description="Run a query using either Boolean retrieval or TF-IDF + cosine similarity VSM."
     )
     parser.add_argument(
         "--index",
@@ -283,14 +301,22 @@ def main() -> None:
         action="store_true",
         help="Show body snippet for each result",
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=["vsm", "boolean"],
+        default="vsm",
+        help="Retrieval model to use",
+    )   
 
     args = parser.parse_args()
 
     print(f"Loading index from: {args.index}")
     index = load_index(args.index)
 
-    print("Building vector space model...")
+    print(f"Building {args.model} model...")
     model = build_model(
+        model_name=args.model,
         index=index,
         title_weight=args.title_weight,
         body_weight=args.body_weight,
@@ -307,7 +333,14 @@ def main() -> None:
         print("Empty query. Exiting.")
         return
 
-    results = model.search(query=query_text, top_k=args.top_k)
+    if args.model == "vsm":
+        results = model.search(query=query_text, top_k=args.top_k)
+    else:
+        results = model.search(query=query_text)
+
+        # 필요하면 top-k만 자르기
+        if args.top_k is not None:
+            results = results[:args.top_k]
 
     print_results(
         results=results,
@@ -315,6 +348,7 @@ def main() -> None:
         query=query_text,
         model=model,
         query_source=query_source,
+        model_name=args.model,
         show_explain=args.explain,
         show_body=args.show_body,
     )
