@@ -23,6 +23,7 @@ It also includes an evaluation pipeline to measure retrieval performance using s
 
 ## Dataset
 - [CISI Dataset (Kaggle)](https://www.kaggle.com/datasets/dmaso01dsta/cisi-a-dataset-for-information-retrieval)
+- [English Stopwords (Kaggle)](https://www.kaggle.com/datasets/amirhoseinsedaghati/english-stopwords)
 
 ## How to Run
 
