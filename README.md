@@ -127,6 +127,43 @@ Example:
 │       └── evaluator.py
 ```
 
+## Pipeline
+```mermaid
+flowchart TD
+    subgraph Build_Phase["Build Phase"]
+        docs["Documents"]
+        tokenizer1["Tokenizer"]
+        index["InvertedIndex"]
+
+        docs --> tokenizer1
+        tokenizer1 --> index
+    end
+
+    subgraph Retrieval_Phase["Retrieval Phase"]
+        query["Query"]
+        tokenizer2["Tokenizer"]
+        weighter["TFIDFWeighter"]
+        vsm["VectorSpaceModel"]
+
+        query --> tokenizer2
+        tokenizer2 --> weighter
+        index --> weighter
+        weighter --> vsm
+        index --> vsm
+    end
+
+    subgraph Evaluation_Phase["Evaluation Phase"]
+        relevance["Relevant Documents"]
+        evaluator["Evaluator"]
+
+        vsm --> evaluator
+        relevance --> evaluator
+    end
+```
+During the build phase, documents are tokenized and indexed using an inverted index.
+In the retrieval phase, queries are processed and ranked using a TF-IDF based Vector Space Model.
+Finally, the evaluation phase measures retrieval performance using metrics such as Precision, Recall, and MAP.
+
 ## Future Work
 
 - Stopword removal
