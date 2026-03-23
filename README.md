@@ -4,26 +4,37 @@
 
 This project implements a modular Information Retrieval (IR) system using the CISI dataset.
 
-The system builds a field-aware inverted index and performs ranked retrieval using a TF-IDF based Vector Space Model (VSM) with cosine similarity.  
+The system builds a field-aware inverted index and supports multiple retrieval models, including:
+
+- Boolean Model (exact match retrieval)
+- TF-IDF based Vector Space Model (ranked retrieval with cosine similarity)
+
 It also includes an evaluation pipeline to measure retrieval performance using standard IR metrics.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Interface Specification](docs/interface_specification.md)
+
+## Dataset
+- [CISI Dataset (Kaggle)](https://www.kaggle.com/datasets/dmaso01dsta/cisi-a-dataset-for-information-retrieval)
+- [English Stopwords (Kaggle)](https://www.kaggle.com/datasets/amirhoseinsedaghati/english-stopwords)
 
 ## What This Project Does
 
 - Builds a field-aware inverted index (title and body)
 - Tokenizes and preprocesses documents and queries
 - Computes TF-IDF weights for documents and queries
-- Performs ranked retrieval using cosine similarity (Vector Space Model)
+- Performs retrieval using:
+  - Boolean Model
+  - Vector Space Model (cosine similarity)
 - Retrieves top-k relevant documents
-- Provides term-level contribution for result explanation
+- Provides term-level contribution for result explanation (VSM)
 - Evaluates performance using:
   - Precision@k
   - Recall@k
   - Average Precision (AP)
   - Mean Average Precision (MAP)
-
-## Dataset
-- [CISI Dataset (Kaggle)](https://www.kaggle.com/datasets/dmaso01dsta/cisi-a-dataset-for-information-retrieval)
-- [English Stopwords (Kaggle)](https://www.kaggle.com/datasets/amirhoseinsedaghati/english-stopwords)
 
 ## How to Run
 
@@ -64,6 +75,7 @@ Example:
 
 Runs a query using the TF-IDF based Vector Space Model.
 
+- `--model`: retrieval model (vsm, boolean)
 - `--index`: path to saved index pickle
 - `--query`: direct query string
 - `--query-file`: path to `CISI.QRY`
@@ -82,7 +94,7 @@ Runs a query using the TF-IDF based Vector Space Model.
 
 Example:
 
-    python run_query.py --query "information retrieval" --top-k 5 --explain
+    python run_query.py --model vsm --query "information retrieval" --top-k 5 --explain
 
 
 ---
@@ -114,6 +126,9 @@ Example:
 ├── build.py
 ├── run_query.py
 ├── evaluate.py
+├── docs/
+│   ├── architecture.md
+│   └── interface_specification.md
 ├── ir/
 │   ├── preprocessors/
 │   │   └── tokenizer.py
@@ -122,7 +137,8 @@ Example:
 │   ├── weighting/
 │   │   └── tfidf.py
 │   ├── models/
-│   │   └── vector_space_model.py
+│   │   ├── vector_space_model.py
+│   │   └── boolean_model.py
 │   └── evaluator/
 │       ├── metrics.py
 │       └── evaluator.py
@@ -143,21 +159,21 @@ flowchart TD
     subgraph Retrieval_Phase["Retrieval Phase"]
         query["Query"]
         tokenizer2["Tokenizer"]
-        weighter["TFIDFWeighter"]
-        vsm["VectorSpaceModel"]
+        weighter["Weighter (Optional)"]
+        model["RetrievalModel"]
 
         query --> tokenizer2
         tokenizer2 --> weighter
         index --> weighter
-        weighter --> vsm
-        index --> vsm
+        weighter --> model
+        index --> model
     end
 
     subgraph Evaluation_Phase["Evaluation Phase"]
         relevance["Relevant Documents"]
         evaluator["Evaluator"]
 
-        vsm --> evaluator
+        model --> evaluator
         relevance --> evaluator
     end
 ```
@@ -167,7 +183,6 @@ Finally, the evaluation phase measures retrieval performance using metrics such 
 
 ## Future Work
 
-- Stopword removal
 - Stemming / lemmatization
 - BM25 ranking model
 - Query expansion techniques
