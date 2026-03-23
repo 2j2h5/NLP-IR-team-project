@@ -24,7 +24,7 @@ Convert raw text into tokens.
 
 ### Interface
 
-```
+```python
 tokenize(text: str) -> list[str]
 ```
 
@@ -43,7 +43,7 @@ Store and retrieve term-based document information.
 
 ### Interface
 
-```
+```python
 get_postings(term: str) -> dict[int, dict[str, int]]
 get_df(term: str) -> int
 
@@ -69,7 +69,7 @@ Convert term frequencies into weighted vectors.
 
 ### Interface
 
-```
+```python
 document_vector(doc_id: int, index) -> dict[str, float]
 query_vector(query_term_counts: dict[str, int], index) -> dict[str, float]
 ```
@@ -89,14 +89,14 @@ Retrieve documents for a given query.
 
 ### Interface
 
-```
+```python
 build() -> None
 search(query: str, top_k: int = 10) -> list[tuple[int, float]]
 ```
 
 ### Optional Interface
 
-```
+```python
 explain(query: str, doc_id: int) -> dict[str, float]
 ```
 
@@ -116,7 +116,7 @@ Evaluate retrieval performance.
 
 ### Interface
 
-```
+```python
 evaluate_query(
     query: str,
     relevant_docs: set[int],
