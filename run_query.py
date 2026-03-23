@@ -333,14 +333,8 @@ def main() -> None:
         print("Empty query. Exiting.")
         return
 
-    if args.model == "vsm":
-        results = model.search(query=query_text, top_k=args.top_k)
-    else:
-        results = model.search(query=query_text)
-
-        # 필요하면 top-k만 자르기
-        if args.top_k is not None:
-            results = results[:args.top_k]
+    model.build()
+    results = model.search(query=query_text, top_k=args.top_k)
 
     print_results(
         results=results,
