@@ -1,5 +1,7 @@
 # CISI IR System
 
+---
+
 ## Overview
 
 This project implements a modular Information Retrieval (IR) system using the CISI dataset.
@@ -11,6 +13,8 @@ The system builds a field-aware inverted index and supports multiple retrieval m
 
 It also includes an evaluation pipeline to measure retrieval performance using standard IR metrics.
 
+---
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
@@ -19,6 +23,8 @@ It also includes an evaluation pipeline to measure retrieval performance using s
 ## Dataset
 - [CISI Dataset (Kaggle)](https://www.kaggle.com/datasets/dmaso01dsta/cisi-a-dataset-for-information-retrieval)
 - [English Stopwords (Kaggle)](https://www.kaggle.com/datasets/amirhoseinsedaghati/english-stopwords)
+
+---
 
 ## What This Project Does
 
@@ -36,6 +42,8 @@ It also includes an evaluation pipeline to measure retrieval performance using s
   - Average Precision (AP)
   - Mean Average Precision (MAP)
 
+---
+
 ## How to Run
 
 ```bash
@@ -52,6 +60,8 @@ python run_query.py --query-file data/CISI.QRY --query-id 27
 python evaluate.py --query-file data/CISI.QRY --rel-file data/CISI.REL
 ```
 
+---
+
 ## CLI Options
 
 ### build.py
@@ -67,9 +77,6 @@ Builds the inverted index from `CISI.ALL`.
 Example:
 
     python build.py --input data/CISI.ALL --output outputs/index.pkl
-
-
----
 
 ### run_query.py
 
@@ -96,9 +103,6 @@ Example:
 
     python run_query.py --model vsm --query "information retrieval" --top-k 5 --explain
 
-
----
-
 ### evaluate.py
 
 Evaluates the retrieval model on the CISI dataset.
@@ -119,6 +123,8 @@ Evaluates the retrieval model on the CISI dataset.
 Example:
 
     python evaluate.py --query-file data/CISI.QRY --rel-file data/CISI.REL --top-k 10
+
+---
 
 ## Project Structure
 ```text
@@ -143,6 +149,8 @@ Example:
 │       ├── metrics.py
 │       └── evaluator.py
 ```
+
+---
 
 ## Pipeline
 ```mermaid
@@ -181,6 +189,8 @@ During the build phase, documents are tokenized and indexed using an inverted in
 In the retrieval phase, queries are processed and ranked using a TF-IDF based Vector Space Model.
 Finally, the evaluation phase measures retrieval performance using metrics such as Precision, Recall, and MAP.
 
+---
+
 ## Future Work
 
 - Stemming / lemmatization
@@ -189,6 +199,8 @@ Finally, the evaluation phase measures retrieval performance using metrics such 
 - Hyperparameter tuning (title/body weighting)
 - Learning-to-rank approaches
 - Semantic retrieval (e.g., embeddings, neural IR)
+
+---
 
 ## Author
 - Lee Jiho - [2j2h5](https://github.com/2j2h5)
