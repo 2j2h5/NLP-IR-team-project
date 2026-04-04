@@ -236,7 +236,7 @@ def main() -> None:
     evaluator = Evaluator(model)
     results = evaluator.evaluate_all(
         queries=queries,
-        relevance=relevance,
+        relevance_judgments=relevance,
         k=args.top_k,
         verbose=not args.quiet,
     )
@@ -244,7 +244,15 @@ def main() -> None:
     print("\n" + "=" * 72)
     print("Final Evaluation Summary")
     print("=" * 72)
-    print(f"MAP: {results['map']:.4f}")
+    print(f"Number of queries: {results['num_queries']}")
+    print(f"Mean Precision@{args.top_k}: {results[f'mean_precision@{args.top_k}']:.4f}")
+    print(f"Mean Recall@{args.top_k}   : {results[f'mean_recall@{args.top_k}']:.4f}")
+    print(f"Mean F0.25@{args.top_k}     : {results[f'mean_f0.25@{args.top_k}']:.4f}")
+    print(f"Mean F0.5@{args.top_k}     : {results[f'mean_f0.5@{args.top_k}']:.4f}")
+    print(f"Mean F1@{args.top_k}       : {results[f'mean_f1@{args.top_k}']:.4f}")
+    print(f"Mean F2@{args.top_k}       : {results[f'mean_f2@{args.top_k}']:.4f}")
+    print(f"Mean F4@{args.top_k}       : {results[f'mean_f4@{args.top_k}']:.4f}")
+    print(f"MAP              : {results['map']:.4f}")
 
 
 if __name__ == "__main__":
