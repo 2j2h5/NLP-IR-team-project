@@ -11,13 +11,11 @@ from ir.preprocessors.tokenizer import Tokenizer
 from ir.indexing.inverted_index import InvertedIndex
 from ir.weighting.tfidf import TFIDFWeighter
 from ir.models.vector_space_model import VectorSpaceModel
+from ir.models.boolean_model import BooleanModel
 from ir.evaluator.evaluator import Evaluator
 
 
 def load_index(index_path: str) -> InvertedIndex:
-    """
-    Load a saved inverted index from a pickle file.
-    """
     with open(index_path, "rb") as f:
         data = pickle.load(f)
 
@@ -25,10 +23,6 @@ def load_index(index_path: str) -> InvertedIndex:
 
 
 def parse_cisi_queries(file_path: str) -> Dict[int, str]:
-    """
-    Parse CISI.QRY file into:
-        {query_id: query_text}
-    """
     queries: Dict[int, str] = {}
 
     current_query_id = None
@@ -54,7 +48,12 @@ def parse_cisi_queries(file_path: str) -> Dict[int, str]:
             elif line.startswith(".W"):
                 current_section = "body"
 
-            elif line.startswith(".A") or line.startswith(".B") or line.startswith(".T") or line.startswith(".X"):
+            elif (
+                line.startswith(".A")
+                or line.startswith(".B")
+                or line.startswith(".T")
+                or line.startswith(".X")
+            ):
                 current_section = None
 
             else:
@@ -66,14 +65,6 @@ def parse_cisi_queries(file_path: str) -> Dict[int, str]:
 
 
 def parse_cisi_rel(file_path: str) -> Dict[int, Set[int]]:
-    """
-    Parse CISI.REL file into:
-        {query_id: {relevant_doc_ids}}
-
-    CISI.REL format:
-        column 0: query_id
-        column 1: document_id
-    """
     relevance: Dict[int, Set[int]] = {}
 
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -98,6 +89,7 @@ def parse_cisi_rel(file_path: str) -> Dict[int, Set[int]]:
 
 
 def build_model(
+    model_name: str,
     index: InvertedIndex,
     title_weight: float = 2.0,
     body_weight: float = 1.0,
@@ -106,10 +98,7 @@ def build_model(
     remove_numbers: bool = False,
     remove_stopwords: bool = False,
     min_token_length: int = 1,
-) -> VectorSpaceModel:
-    """
-    Build a VectorSpaceModel from a loaded index.
-    """
+):
     tokenizer = Tokenizer(
         lowercase=True,
         remove_numbers=remove_numbers,
@@ -118,26 +107,38 @@ def build_model(
         min_token_length=min_token_length,
     )
 
-    weighter = TFIDFWeighter(
-        title_weight=title_weight,
-        body_weight=body_weight,
-        use_log_tf=use_log_tf,
-        smooth_idf=smooth_idf,
-    )
+    if model_name == "vsm":
+        weighter = TFIDFWeighter(
+            title_weight=title_weight,
+            body_weight=body_weight,
+            use_log_tf=use_log_tf,
+            smooth_idf=smooth_idf,
+        )
 
-    model = VectorSpaceModel(
-        index=index,
-        tokenizer=tokenizer,
-        weighter=weighter,
-    )
+        model = VectorSpaceModel(
+            index=index,
+            tokenizer=tokenizer,
+            weighter=weighter,
+        )
+
+    elif model_name == "boolean":
+        model = BooleanModel(
+            index=index,
+            tokenizer=tokenizer,
+        )
+
+    else:
+        raise ValueError(f"Unsupported model: {model_name}")
+
     model.build()
     return model
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Evaluate TF-IDF + cosine similarity VSM on CISI queries/relevance."
+        description="Evaluate retrieval models on CISI queries/relevance."
     )
+
     parser.add_argument(
         "--index",
         type=str,
@@ -157,32 +158,40 @@ def main() -> None:
         help="Path to CISI.REL file",
     )
     parser.add_argument(
+        "--model",
+        type=str,
+        choices=["vsm", "boolean"],
+        default="vsm",
+        help="Retrieval model to evaluate",
+    )
+    parser.add_argument(
         "--top-k",
         type=int,
         default=10,
         help="Cutoff rank k for Precision@k and Recall@k",
     )
+
     parser.add_argument(
         "--title-weight",
         type=float,
         default=2.0,
-        help="Weight for title field TF",
+        help="Weight for title field TF. Used only for VSM.",
     )
     parser.add_argument(
         "--body-weight",
         type=float,
         default=1.0,
-        help="Weight for body field TF",
+        help="Weight for body field TF. Used only for VSM.",
     )
     parser.add_argument(
         "--no-log-tf",
         action="store_true",
-        help="Disable log-scaled TF",
+        help="Disable log-scaled TF. Used only for VSM.",
     )
     parser.add_argument(
         "--no-smooth-idf",
         action="store_true",
-        help="Disable smoothed IDF",
+        help="Disable smoothed IDF. Used only for VSM.",
     )
     parser.add_argument(
         "--remove-numbers",
@@ -198,7 +207,7 @@ def main() -> None:
         "--min-token-length",
         type=int,
         default=1,
-        help="Minimum token length to keep in query tokenization",
+        help="Minimum token length to keep during query tokenization",
     )
     parser.add_argument(
         "--quiet",
@@ -211,8 +220,9 @@ def main() -> None:
     print(f"Loading index from: {args.index}")
     index = load_index(args.index)
 
-    print("Building vector space model...")
+    print(f"Building {args.model} model...")
     model = build_model(
+        model_name=args.model,
         index=index,
         title_weight=args.title_weight,
         body_weight=args.body_weight,
@@ -229,9 +239,10 @@ def main() -> None:
     print(f"Parsing relevance from: {args.rel_file}")
     relevance = parse_cisi_rel(args.rel_file)
 
-    print(f"Number of queries   : {len(queries)}")
-    print(f"Queries with labels : {len(relevance)}")
-    print(f"Evaluating at k     : {args.top_k}")
+    print(f"Model             : {args.model}")
+    print(f"Number of queries : {len(queries)}")
+    print(f"Queries with labels: {len(relevance)}")
+    print(f"Evaluating at k   : {args.top_k}")
 
     evaluator = Evaluator(model)
     results = evaluator.evaluate_all(
@@ -244,15 +255,16 @@ def main() -> None:
     print("\n" + "=" * 72)
     print("Final Evaluation Summary")
     print("=" * 72)
+    print(f"Model: {args.model}")
     print(f"Number of queries: {results['num_queries']}")
     print(f"Mean Precision@{args.top_k}: {results[f'mean_precision@{args.top_k}']:.4f}")
     print(f"Mean Recall@{args.top_k}   : {results[f'mean_recall@{args.top_k}']:.4f}")
-    print(f"Mean F0.25@{args.top_k}     : {results[f'mean_f0.25@{args.top_k}']:.4f}")
+    print(f"Mean F0.25@{args.top_k}    : {results[f'mean_f0.25@{args.top_k}']:.4f}")
     print(f"Mean F0.5@{args.top_k}     : {results[f'mean_f0.5@{args.top_k}']:.4f}")
     print(f"Mean F1@{args.top_k}       : {results[f'mean_f1@{args.top_k}']:.4f}")
     print(f"Mean F2@{args.top_k}       : {results[f'mean_f2@{args.top_k}']:.4f}")
     print(f"Mean F4@{args.top_k}       : {results[f'mean_f4@{args.top_k}']:.4f}")
-    print(f"MAP              : {results['map']:.4f}")
+    print(f"MAP                        : {results['map']:.4f}")
 
 
 if __name__ == "__main__":

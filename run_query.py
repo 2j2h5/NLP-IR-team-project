@@ -333,7 +333,6 @@ def main() -> None:
         print("Empty query. Exiting.")
         return
 
-    model.build()
     results = model.search(query=query_text, top_k=args.top_k)
 
     print_results(
