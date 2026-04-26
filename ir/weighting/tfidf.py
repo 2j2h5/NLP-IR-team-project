@@ -145,16 +145,13 @@ class TFIDFWeighter:
         """
         Build a sparse TF-IDF vector for a document.
 
-        Args:
-            doc_id: document ID
-            index: InvertedIndex instance
-
-        Returns:
-            {term: tf-idf weight}
+        This uses index.get_doc_terms(doc_id), so it only iterates over terms
+        that actually appear in the document instead of scanning the full
+        vocabulary.
         """
         vector: Dict[str, float] = {}
 
-        for term in index.vocabulary():
+        for term in index.get_doc_terms(doc_id):
             weight = self.term_weight(term, doc_id, index)
             if weight > 0.0:
                 vector[term] = weight
