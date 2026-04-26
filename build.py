@@ -1,73 +1,10 @@
 import argparse
 import os
 import pickle
-from typing import Dict
 
 from ir.preprocessors.tokenizer import Tokenizer
 from ir.indexing.inverted_index import InvertedIndex
-
-
-def parse_cisi_all(file_path: str) -> Dict[int, Dict[str, str]]:
-    """
-    Parse the CISI.ALL file into a fielded document dictionary.
-
-    Expected output format:
-    {
-        doc_id: {
-            "title": "...",
-            "body": "..."
-        }
-    }
-    """
-    documents: Dict[int, Dict[str, str]] = {}
-
-    current_doc_id = None
-    current_section = None
-
-    title_lines = []
-    body_lines = []
-
-    def save_current_document() -> None:
-        nonlocal current_doc_id, title_lines, body_lines
-
-        if current_doc_id is None:
-            return
-
-        documents[current_doc_id] = {
-            "title": " ".join(title_lines).strip(),
-            "body": " ".join(body_lines).strip(),
-        }
-
-    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-        for raw_line in f:
-            line = raw_line.rstrip("\n")
-
-            if line.startswith(".I "):
-                save_current_document()
-
-                current_doc_id = int(line.split()[1])
-                current_section = None
-                title_lines = []
-                body_lines = []
-
-            elif line.startswith(".T"):
-                current_section = "title"
-
-            elif line.startswith(".W"):
-                current_section = "body"
-
-            elif line.startswith(".A") or line.startswith(".B") or line.startswith(".X"):
-                current_section = None
-
-            else:
-                if current_section == "title":
-                    title_lines.append(line.strip())
-                elif current_section == "body":
-                    body_lines.append(line.strip())
-
-    save_current_document()
-    return documents
-
+from ir.datasets.cisi import parse_cisi_all
 
 def build_index(
     cisi_all_path: str,
