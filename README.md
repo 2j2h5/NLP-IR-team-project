@@ -62,6 +62,8 @@ python build.py --dataset cisi --input data/CISI.ALL --output-prefix outputs/cis
 python build.py --dataset kilt --target-size 500 --max-depth 2 --load-limit 100000 --num-auto-seeds 50 --streaming --output-prefix outputs/kilt_500
 ```
 
+---
+
 ### 2. Evaluate (CISI)
 
 #### VSM (recommended)
@@ -72,6 +74,8 @@ python evaluate.py --dataset cisi --model vsm --query-file data/CISI.QRY --rel-f
 ```bash
 python evaluate.py --dataset cisi --model boolean --query-file data/CISI.QRY --rel-file data/CISI.REL
 ```
+
+---
 
 ### 3. Evaluate (KILT-Wikipedia)
 
@@ -98,8 +102,6 @@ python evlauate.py --dataset kilt --model boolean --size 500
 | `--dataset` | str | Dataset to build (`cisi`, `kilt`) |
 | `--output-prefix` | str | Output file prefix (e.g., `outputs/kilt_500`) |
 
----
-
 #### KILT Options
 
 | Option | Type | Default | Description |
@@ -110,8 +112,6 @@ python evlauate.py --dataset kilt --model boolean --size 500
 | `--num-auto-seeds` | int | 20 | Number of seed documents (based on out-degree) |
 | `--streaming` | flag | False | Enable streaming mode (avoid full dataset download) |
 | `--random-seed` | int | 42 | Random seed for reproducibility |
-
----
 
 #### Tokenization Options
 
@@ -125,7 +125,7 @@ python evlauate.py --dataset kilt --model boolean --size 500
 
 ### run_query.py
 
-Runs a query using the selected retrieval model (Boolean or VSM).
+#### Common Opotions
 
 | Option | Type | Default | Description |
 |------|------|--------|------------|
@@ -137,8 +137,6 @@ Runs a query using the selected retrieval model (Boolean or VSM).
 | `--random-query` | flag | False | Select a random query from query file |
 | `--top-k` | int | 10 | Number of top results to return |
 
----
-
 #### VSM Options
 
 | Option | Type | Default | Description |
@@ -148,8 +146,6 @@ Runs a query using the selected retrieval model (Boolean or VSM).
 | `--no-log-tf` | flag | False | Disable log-scaled TF |
 | `--no-smooth-idf` | flag | False | Disable smoothed IDF |
 
----
-
 #### Tokenization Options
 
 | Option | Type | Description |
@@ -157,8 +153,6 @@ Runs a query using the selected retrieval model (Boolean or VSM).
 | `--remove-numbers` | flag | Remove numeric tokens |
 | `--remove-stopwords` | flag | Remove stopwords |
 | `--min-token-length` | int | Minimum token length |
-
----
 
 #### Output Options
 
@@ -171,14 +165,14 @@ Runs a query using the selected retrieval model (Boolean or VSM).
 
 ### evaluate.py
 
+#### Common Opotions
+
 | Option | Type | Default | Description |
 |------|------|--------|------------|
 | `--dataset` | str | `cisi` | Dataset to evaluate (`cisi`, `kilt`) |
 | `--size` | int | 500 | Dataset size (used for file prefix) |
 | `--model` | str | `vsm` | Retrieval model (`vsm`, `boolean`) |
 | `--top-k` | int | 10 | Cutoff rank for evaluation |
-
----
 
 #### VSM Options
 
@@ -188,8 +182,6 @@ Runs a query using the selected retrieval model (Boolean or VSM).
 | `--body-weight` | float | 1.0 | Weight for body field |
 | `--no-log-tf` | flag | False | Disable log-scaled TF |
 | `--no-smooth-idf` | flag | False | Disable smoothed IDF |
-
----
 
 #### Tokenization Options (Query)
 
