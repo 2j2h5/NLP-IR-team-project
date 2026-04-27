@@ -1,17 +1,12 @@
-# CISI IR System
+# NLP & IR Team Project
 
 ---
 
 ## Overview
 
-This project implements a modular Information Retrieval (IR) system using the CISI dataset.
+This project implements and evaluates Information Retrieval (IR) models on both the CISI dataset and a sampled subset of KILT-Wikipedia.
 
-The system builds a field-aware inverted index and supports multiple retrieval models, including:
-
-- Boolean Model (exact match retrieval)
-- TF-IDF based Vector Space Model (ranked retrieval with cosine similarity)
-
-It also includes an evaluation pipeline to measure retrieval performance using standard IR metrics.
+The main goal is to extend classic IR models (Boolean, Vector Space Model) by incorporating document link structure and evaluating their performance.
 
 ---
 
@@ -22,6 +17,7 @@ It also includes an evaluation pipeline to measure retrieval performance using s
 
 ## Dataset
 - [CISI Dataset (Kaggle)](https://www.kaggle.com/datasets/dmaso01dsta/cisi-a-dataset-for-information-retrieval)
+- [KILT-Wikipedia (Kaggle)](https://huggingface.co/datasets/facebook/kilt_wikipedia)
 - [English Stopwords (Kaggle)](https://www.kaggle.com/datasets/amirhoseinsedaghati/english-stopwords)
 
 ---
@@ -35,29 +31,58 @@ It also includes an evaluation pipeline to measure retrieval performance using s
   - Boolean Model
   - Vector Space Model (cosine similarity)
 - Retrieves top-k relevant documents
-- Provides term-level contribution for result explanation (VSM)
 - Evaluates performance using:
   - Precision@k
   - Recall@k
   - Average Precision (AP)
   - Mean Average Precision (MAP)
 
+### Additional (KILT-Wikipedia)
+
+- Streams large-scale Wikipedia dataset without full download
+- Constructs internal hyperlink graph between documents
+- Automatically selects seed documents based on out-degree
+- Samples connected document subset using BFS
+- Generates synthetic query/relevance pairs for evaluation
+
 ---
 
 ## How to Run
 
+### 1. Build Dataset
+
+#### CISI
+
 ```bash
-# 1. Build index
-python build.py --input data/CISI.ALL
+python build.py --dataset cisi --input data/CISI.ALL --output-prefix outputs/cisi
+```
 
-# 2. Run a query
-python run_query.py --query "information retrieval"
+#### KILT-Wikipedia (recommended)
+```bash
+python build.py --dataset kilt --target-size 500 --max-depth 2 --load-limit 100000 --num-auto-seeds 50 --streaming --output-prefix outputs/kilt_500
+```
 
-# (optional) use query file
-python run_query.py --query-file data/CISI.QRY --query-id 27
+### 2. Evaluate (CISI)
 
-# 3. Evaluate the system
-python evaluate.py --query-file data/CISI.QRY --rel-file data/CISI.REL
+#### VSM (recommended)
+```bash
+python evaluate.py --dataset cisi --model vsm --query-file data/CISI.QRY --rel-file data/CISI.REL
+```
+#### Boolean Model
+```bash
+python evaluate.py --dataset cisi --model boolean --query-file data/CISI.QRY --rel-file data/CISI.REL
+```
+
+### 3. Evaluate (KILT-Wikipedia)
+
+#### VSM (recommended)
+```bash
+python evaluate.py --dataset kilt --model vsm --size 500
+```
+
+#### Boolean Model
+```bash
+python evlauate.py --dataset kilt --model boolean --size 500
 ```
 
 ---
@@ -66,63 +91,113 @@ python evaluate.py --query-file data/CISI.QRY --rel-file data/CISI.REL
 
 ### build.py
 
-Builds the inverted index from `CISI.ALL`.
+#### Common Options
 
-- `--input`: path to `CISI.ALL` file
-- `--output`: path to save the built index pickle (default: `outputs/index.pkl`)
-- `--remove-numbers`: remove numeric tokens during tokenization
-- `--remove-stopwords`: remove stopwords during tokenization
-- `--min-token-length`: minimum token length to keep
+| Option | Type | Description |
+|------|------|------------|
+| `--dataset` | str | Dataset to build (`cisi`, `kilt`) |
+| `--output-prefix` | str | Output file prefix (e.g., `outputs/kilt_500`) |
 
-Example:
+---
 
-    python build.py --input data/CISI.ALL --output outputs/index.pkl
+#### KILT Options
+
+| Option | Type | Default | Description |
+|------|------|--------|------------|
+| `--target-size` | int | 500 | Target number of sampled documents (upper bound) |
+| `--max-depth` | int | 2 | BFS depth for sampling |
+| `--load-limit` | int | None | Number of streamed documents to load |
+| `--num-auto-seeds` | int | 20 | Number of seed documents (based on out-degree) |
+| `--streaming` | flag | False | Enable streaming mode (avoid full dataset download) |
+| `--random-seed` | int | 42 | Random seed for reproducibility |
+
+---
+
+#### Tokenization Options
+
+| Option | Type | Description |
+|------|------|------------|
+| `--remove-numbers` | flag | Remove numeric tokens |
+| `--remove-stopwords` | flag | Remove stopwords |
+| `--min-token-length` | int | Minimum token length |
+
+---
 
 ### run_query.py
 
-Runs a query using the TF-IDF based Vector Space Model.
+Runs a query using the selected retrieval model (Boolean or VSM).
 
-- `--model`: retrieval model (vsm, boolean)
-- `--index`: path to saved index pickle
-- `--query`: direct query string
-- `--query-file`: path to `CISI.QRY`
-- `--query-id`: specific query ID from query file
-- `--random-query`: randomly select a query from query file
-- `--top-k`: number of top results to return
-- `--title-weight`: weight for title field
-- `--body-weight`: weight for body field
-- `--no-log-tf`: disable log-scaled TF
-- `--no-smooth-idf`: disable smoothed IDF
-- `--remove-numbers`: remove numeric tokens in query tokenization
-- `--remove-stopwords`: remove stopwords in query tokenization
-- `--min-token-length`: minimum token length to keep
-- `--explain`: show term-level contribution
-- `--show-body`: show body snippet for each result
+| Option | Type | Default | Description |
+|------|------|--------|------------|
+| `--model` | str | `vsm` | Retrieval model (`vsm`, `boolean`) |
+| `--index` | str | required | Path to index pickle file |
+| `--query` | str | None | Direct query string |
+| `--query-file` | str | None | Path to query file (e.g., CISI.QRY) |
+| `--query-id` | int | None | Specific query ID from query file |
+| `--random-query` | flag | False | Select a random query from query file |
+| `--top-k` | int | 10 | Number of top results to return |
 
-Example:
+---
 
-    python run_query.py --model vsm --query "information retrieval" --top-k 5 --explain
+#### VSM Options
+
+| Option | Type | Default | Description |
+|------|------|--------|------------|
+| `--title-weight` | float | 2.0 | Weight for title field |
+| `--body-weight` | float | 1.0 | Weight for body field |
+| `--no-log-tf` | flag | False | Disable log-scaled TF |
+| `--no-smooth-idf` | flag | False | Disable smoothed IDF |
+
+---
+
+#### Tokenization Options
+
+| Option | Type | Description |
+|------|------|------------|
+| `--remove-numbers` | flag | Remove numeric tokens |
+| `--remove-stopwords` | flag | Remove stopwords |
+| `--min-token-length` | int | Minimum token length |
+
+---
+
+#### Output Options
+
+| Option | Type | Description |
+|------|------|------------|
+| `--explain` | flag | Show term-level contribution (VSM only) |
+| `--show-body` | flag | Display document body snippet |
+
+---
 
 ### evaluate.py
 
-Evaluates the retrieval model on the CISI dataset.
+| Option | Type | Default | Description |
+|------|------|--------|------------|
+| `--dataset` | str | `cisi` | Dataset to evaluate (`cisi`, `kilt`) |
+| `--size` | int | 500 | Dataset size (used for file prefix) |
+| `--model` | str | `vsm` | Retrieval model (`vsm`, `boolean`) |
+| `--top-k` | int | 10 | Cutoff rank for evaluation |
 
-- `--index`: path to saved index pickle
-- `--query-file`: path to `CISI.QRY`
-- `--rel-file`: path to `CISI.REL`
-- `--top-k`: cutoff rank for Precision@k and Recall@k
-- `--title-weight`: weight for title field
-- `--body-weight`: weight for body field
-- `--no-log-tf`: disable log-scaled TF
-- `--no-smooth-idf`: disable smoothed IDF
-- `--remove-numbers`: remove numeric tokens during query tokenization
-- `--remove-stopwords`: remove stopwords during query tokenization
-- `--min-token-length`: minimum token length to keep
-- `--quiet`: disable per-query output
+---
 
-Example:
+#### VSM Options
 
-    python evaluate.py --query-file data/CISI.QRY --rel-file data/CISI.REL --top-k 10
+| Option | Type | Default | Description |
+|------|------|--------|------------|
+| `--title-weight` | float | 2.0 | Weight for title field |
+| `--body-weight` | float | 1.0 | Weight for body field |
+| `--no-log-tf` | flag | False | Disable log-scaled TF |
+| `--no-smooth-idf` | flag | False | Disable smoothed IDF |
+
+---
+
+#### Tokenization Options (Query)
+
+| Option | Type | Description |
+|------|------|------------|
+| `--remove-numbers` | flag | Remove numeric tokens |
+| `--remove-stopwords` | flag | Remove stopwords |
+| `--min-token-length` | int | Minimum token length |
 
 ---
 
@@ -136,6 +211,9 @@ Example:
 │   ├── architecture.md
 │   └── interface_specification.md
 ├── ir/
+│   ├── datasets/
+│   │   ├── cisi.py
+│   │   └── kilt_wikipedia.py
 │   ├── preprocessors/
 │   │   └── tokenizer.py
 │   ├── indexing/
@@ -148,6 +226,7 @@ Example:
 │   └── evaluator/
 │       ├── metrics.py
 │       └── evaluator.py
+├── outputs/
 ```
 
 ---
