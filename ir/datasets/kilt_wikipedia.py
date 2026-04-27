@@ -272,40 +272,24 @@ def build_edges(
 
 def build_queries_and_relevance(
     documents: Dict[int, KiltDocument],
-    query_body_chars: int = 200,
-    include_self: bool = True,
-    include_outlinks: bool = True,
-    skip_empty_relevance: bool = True,
 ) -> Tuple[Dict[int, str], Dict[int, Set[int]]]:
-    """
-    Build synthetic QRY/REL pairs.
 
-    Query:
-        title + first 200 characters of first paragraph
-
-    Relevance:
-        {self_doc_id} union out_links_in_sample
-    """
     queries: Dict[int, str] = {}
     relevance: Dict[int, Set[int]] = {}
 
     for doc_id, doc in documents.items():
-        rel_docs: Set[int] = set()
 
-        if include_self:
-            rel_docs.add(doc_id)
+        # query: title only
+        query_text = doc.title.strip()
 
-        if include_outlinks:
-            rel_docs.update(doc.out_links)
+        # relevance: outlinks only
+        rel_docs = set(doc.out_links)
 
-        if skip_empty_relevance and not rel_docs:
+        # outlinks 없으면 skip
+        if not rel_docs:
             continue
 
-        query_text = doc.title
-        if doc.first_paragraph:
-            query_text += " " + doc.first_paragraph[:query_body_chars]
-
-        queries[doc_id] = query_text.strip()
+        queries[doc_id] = query_text
         relevance[doc_id] = rel_docs
 
     return queries, relevance
