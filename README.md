@@ -49,6 +49,23 @@ The main goal is to extend classic IR models (Boolean, Vector Space Model) by in
 
 ## How to Run
 
+### Requirements (KILT-Wikipedia)
+
+To use the KILT_Wikipedia dataset:
+- Python 3.11 is recommended
+- Hugging Face datasets may not work properly with newer versions (e.g., Python 3.14)
+- Use a virtual environment
+
+```bash
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install "datasets<4.0.0"
+pip install numpy nltk
+```
+
+- The full KILT-Wikipedia dataset is ~66GB
+- You should use ```--streaming``` to avoid downloading the entire dataset
+
 ### 1. Build Dataset
 
 #### CISI
