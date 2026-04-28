@@ -198,7 +198,7 @@ def main() -> None:
     parser.add_argument(
         "--load-limit",
         type=int,
-        default=None,
+        default=100000,
         help="Maximum number of KILT records to load before sampling.",
     )
     parser.add_argument(
@@ -209,7 +209,7 @@ def main() -> None:
     parser.add_argument(
         "--num-auto-seeds",
         type=int,
-        default=20,
+        default=50,
         help="Number of high-out-degree documents used as BFS seeds for KILT.",
     )
     parser.add_argument(
