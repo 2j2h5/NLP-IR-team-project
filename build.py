@@ -1,7 +1,7 @@
 import argparse
 import os
 import pickle
-from typing import Any, Dict, Set
+from typing import Any, Dict
 
 from ir.preprocessors.tokenizer import Tokenizer
 from ir.indexing.inverted_index import InvertedIndex
@@ -86,7 +86,11 @@ def build_kilt(args: argparse.Namespace) -> None:
     print("Building KILT-Wikipedia subset...")
     print(f"Target size    : {args.target_size}")
     print(f"Max depth      : {args.max_depth}")
-    print(f"Num auto seeds : {args.num_auto_seeds}")
+    print(f"Load limit     : {args.load_limit}")
+    print(f"Num seeds      : {args.num_auto_seeds}")
+    print(f"Seed strategy  : {args.seed_strategy}")
+    print(f"Random seed    : {args.random_seed}")
+    print(f"Max queries    : {args.max_queries}")
 
     subset = build_kilt_subset(
         records=dataset,
@@ -95,6 +99,8 @@ def build_kilt(args: argparse.Namespace) -> None:
         load_limit=args.load_limit,
         random_seed=args.random_seed,
         num_auto_seeds=args.num_auto_seeds,
+        seed_strategy=args.seed_strategy,
+        max_queries=args.max_queries,
     )
 
     documents = subset["documents"]
@@ -146,7 +152,7 @@ def main() -> None:
         default=None,
         help=(
             "Output prefix without suffix. "
-            "Example: outputs/cisi or outputs/kilt_500"
+            "Example: outputs/cisi or outputs/kilt_1000_highdeg_q150"
         ),
     )
 
@@ -210,13 +216,30 @@ def main() -> None:
         "--num-auto-seeds",
         type=int,
         default=50,
-        help="Number of high-out-degree documents used as BFS seeds for KILT.",
+        help="Number of BFS seed documents for KILT.",
+    )
+    parser.add_argument(
+        "--seed-strategy",
+        type=str,
+        default="high_outdegree",
+        choices=["high_outdegree", "random"],
+        help=(
+            "Seed selection strategy for KILT BFS sampling. "
+            "'high_outdegree' selects documents with large internal out-degree. "
+            "'random' selects seed documents randomly."
+        ),
     )
     parser.add_argument(
         "--random-seed",
         type=int,
         default=42,
-        help="Random seed for deterministic BFS neighbor ordering.",
+        help="Random seed for deterministic sampling and BFS neighbor ordering.",
+    )
+    parser.add_argument(
+        "--max-queries",
+        type=int,
+        default=None,
+        help="Maximum number of generated KILT pseudo-queries.",
     )
 
     # Tokenization options

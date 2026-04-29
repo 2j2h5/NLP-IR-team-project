@@ -1,4 +1,6 @@
 import argparse
+import csv
+import os
 import pickle
 from typing import Any, Dict, Set
 
@@ -27,8 +29,43 @@ def get_default_prefix(dataset: str, size: int) -> str:
         return "outputs/cisi"
     if dataset == "kilt":
         return f"outputs/kilt_{size}"
-
     raise ValueError(f"Unsupported dataset: {dataset}")
+
+
+def append_csv(csv_path: str, row: Dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+
+    fieldnames = [
+        "dataset",
+        "model",
+        "prefix",
+        "top_k",
+        "link_score",
+        "alpha",
+        "seed_strategy",
+        "random_seed",
+        "num_docs",
+        "vocab_size",
+        "num_queries",
+        "precision",
+        "recall",
+        "f0.25",
+        "f0.5",
+        "f1",
+        "f2",
+        "f4",
+        "map",
+    ]
+
+    file_exists = os.path.exists(csv_path)
+
+    with open(csv_path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+        if not file_exists:
+            writer.writeheader()
+
+        writer.writerow(row)
 
 
 def build_model(
@@ -134,120 +171,56 @@ def main() -> None:
         description="Evaluate retrieval models on CISI or KILT-Wikipedia artifacts."
     )
 
-    parser.add_argument(
-        "--dataset",
-        choices=["cisi", "kilt"],
-        default="cisi",
-        help="Dataset artifacts to evaluate.",
-    )
-    parser.add_argument(
-        "--size",
-        type=int,
-        default=500,
-        help="KILT sample size used in artifact names. Used only when --dataset kilt.",
-    )
-    parser.add_argument(
-        "--prefix",
-        type=str,
-        default=None,
-        help="Artifact prefix. Example: outputs/cisi or outputs/kilt_500.",
-    )
+    parser.add_argument("--dataset", choices=["cisi", "kilt"], default="cisi")
+    parser.add_argument("--size", type=int, default=500)
+    parser.add_argument("--prefix", type=str, default=None)
 
-    parser.add_argument(
-        "--index",
-        type=str,
-        default=None,
-        help="Optional explicit path to index pickle.",
-    )
-    parser.add_argument(
-        "--queries",
-        type=str,
-        default=None,
-        help="Optional explicit path to queries pickle.",
-    )
-    parser.add_argument(
-        "--relevance",
-        type=str,
-        default=None,
-        help="Optional explicit path to relevance pickle.",
-    )
-    parser.add_argument(
-        "--graph",
-        type=str,
-        default=None,
-        help="Optional explicit path to graph pickle. Required for link-vsm.",
-    )
+    parser.add_argument("--index", type=str, default=None)
+    parser.add_argument("--queries", type=str, default=None)
+    parser.add_argument("--relevance", type=str, default=None)
+    parser.add_argument("--graph", type=str, default=None)
 
     parser.add_argument(
         "--model",
         choices=["vsm", "boolean", "link-vsm"],
         default="vsm",
-        help="Retrieval model to evaluate.",
     )
-    parser.add_argument(
-        "--top-k",
-        type=int,
-        default=10,
-        help="Cutoff rank k for evaluation.",
-    )
+    parser.add_argument("--top-k", type=int, default=10)
 
     parser.add_argument(
         "--link-score",
         choices=["indegree", "pagerank"],
         default="pagerank",
-        help="Link score method for link-vsm.",
     )
+    parser.add_argument("--alpha", type=float, default=0.8)
+
+    parser.add_argument("--title-weight", type=float, default=2.0)
+    parser.add_argument("--body-weight", type=float, default=1.0)
+    parser.add_argument("--no-log-tf", action="store_true")
+    parser.add_argument("--no-smooth-idf", action="store_true")
+
+    parser.add_argument("--remove-numbers", action="store_true")
+    parser.add_argument("--remove-stopwords", action="store_true")
+    parser.add_argument("--min-token-length", type=int, default=1)
+
+    parser.add_argument("--quiet", action="store_true")
+
+    # CSV 저장 옵션
+    parser.add_argument("--save-csv", action="store_true")
     parser.add_argument(
-        "--alpha",
-        type=float,
-        default=0.8,
-        help="Interpolation weight for text score in link-vsm.",
+        "--csv-path",
+        type=str,
+        default="outputs/summary/all_results.csv",
     )
 
+    # 실험 메타데이터
     parser.add_argument(
-        "--title-weight",
-        type=float,
-        default=2.0,
-        help="Weight for title field TF. Used by VSM and link-vsm.",
+        "--seed-strategy",
+        type=str,
+        default="",
+        choices=["", "high_outdegree", "random"],
     )
-    parser.add_argument(
-        "--body-weight",
-        type=float,
-        default=1.0,
-        help="Weight for body field TF. Used by VSM and link-vsm.",
-    )
-    parser.add_argument(
-        "--no-log-tf",
-        action="store_true",
-        help="Disable log-scaled TF. Used by VSM and link-vsm.",
-    )
-    parser.add_argument(
-        "--no-smooth-idf",
-        action="store_true",
-        help="Disable smoothed IDF. Used by VSM and link-vsm.",
-    )
-
-    parser.add_argument(
-        "--remove-numbers",
-        action="store_true",
-        help="Remove numeric tokens during query tokenization.",
-    )
-    parser.add_argument(
-        "--remove-stopwords",
-        action="store_true",
-        help="Remove stopwords during query tokenization.",
-    )
-    parser.add_argument(
-        "--min-token-length",
-        type=int,
-        default=1,
-        help="Minimum token length to keep during query tokenization.",
-    )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Disable per-query metric output.",
-    )
+    parser.add_argument("--random-seed", type=str, default="")
 
     args = parser.parse_args()
 
@@ -325,6 +298,34 @@ def main() -> None:
         link_score=args.link_score,
         alpha=args.alpha,
     )
+
+    if args.save_csv:
+        k = args.top_k
+
+        row = {
+            "dataset": args.dataset,
+            "model": args.model,
+            "prefix": prefix,
+            "top_k": k,
+            "link_score": args.link_score if args.model == "link-vsm" else "",
+            "alpha": args.alpha if args.model == "link-vsm" else "",
+            "seed_strategy": args.seed_strategy,
+            "random_seed": args.random_seed,
+            "num_docs": len(index),
+            "vocab_size": len(index.vocabulary()),
+            "num_queries": results["num_queries"],
+            "precision": results[f"mean_precision@{k}"],
+            "recall": results[f"mean_recall@{k}"],
+            "f0.25": results[f"mean_f0.25@{k}"],
+            "f0.5": results[f"mean_f0.5@{k}"],
+            "f1": results[f"mean_f1@{k}"],
+            "f2": results[f"mean_f2@{k}"],
+            "f4": results[f"mean_f4@{k}"],
+            "map": results["map"],
+        }
+
+        append_csv(args.csv_path, row)
+        print(f"\n[INFO] Saved CSV row to: {args.csv_path}")
 
 
 if __name__ == "__main__":

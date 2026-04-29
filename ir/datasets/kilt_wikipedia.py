@@ -15,10 +15,6 @@ class KiltDocument:
     out_links: Set[int]
 
 
-def normalize_title(title: str) -> str:
-    return title.strip().replace("_", " ").lower()
-
-
 def _safe_int(value: Any) -> Optional[int]:
     try:
         if value is None or value == "":
@@ -61,7 +57,6 @@ def extract_anchor_target_ids(record: Dict[str, Any]) -> Set[int]:
                 target_id = _safe_int(value)
                 if target_id is not None:
                     target_ids.add(target_id)
-
         else:
             target_id = _safe_int(candidates)
             if target_id is not None:
@@ -85,16 +80,8 @@ def extract_anchor_target_ids(record: Dict[str, Any]) -> Set[int]:
 
 
 def extract_document(record: Dict[str, Any]) -> Optional[KiltDocument]:
-    doc_id = _safe_int(
-        record.get("wikipedia_id")
-        or record.get("id")
-    )
-
-    title = (
-        record.get("wikipedia_title")
-        or record.get("title")
-        or ""
-    )
+    doc_id = _safe_int(record.get("wikipedia_id") or record.get("id"))
+    title = record.get("wikipedia_title") or record.get("title") or ""
 
     if doc_id is None or not title:
         return None
@@ -134,15 +121,102 @@ def load_kilt_documents(
     return documents
 
 
-def build_title_to_id(
+def compute_internal_out_links(
     documents: Dict[int, KiltDocument],
-) -> Dict[str, int]:
-    title_to_id: Dict[str, int] = {}
+) -> Dict[int, Set[int]]:
+    loaded_ids = set(documents.keys())
+
+    return {
+        doc_id: {
+            target_id
+            for target_id in doc.out_links
+            if target_id in loaded_ids and target_id != doc_id
+        }
+        for doc_id, doc in documents.items()
+    }
+
+
+def select_seed_ids_by_out_degree(
+    internal_out_links: Dict[int, Set[int]],
+    num_seeds: int,
+) -> List[int]:
+    ranked = sorted(
+        internal_out_links.items(),
+        key=lambda item: len(item[1]),
+        reverse=True,
+    )
+
+    return [
+        doc_id
+        for doc_id, links in ranked[:num_seeds]
+        if len(links) > 0
+    ]
+
+
+def select_seed_ids_random(
+    internal_out_links: Dict[int, Set[int]],
+    num_seeds: int,
+    random_seed: int,
+) -> List[int]:
+    rng = random.Random(random_seed)
+
+    candidate_ids = [
+        doc_id
+        for doc_id, links in internal_out_links.items()
+        if len(links) > 0
+    ]
+
+    if len(candidate_ids) <= num_seeds:
+        return candidate_ids
+
+    return rng.sample(candidate_ids, num_seeds)
+
+
+def select_seed_ids(
+    internal_out_links: Dict[int, Set[int]],
+    num_seeds: int,
+    seed_strategy: str,
+    random_seed: int,
+) -> List[int]:
+    if seed_strategy == "high_outdegree":
+        return select_seed_ids_by_out_degree(
+            internal_out_links=internal_out_links,
+            num_seeds=num_seeds,
+        )
+
+    if seed_strategy == "random":
+        return select_seed_ids_random(
+            internal_out_links=internal_out_links,
+            num_seeds=num_seeds,
+            random_seed=random_seed,
+        )
+
+    raise ValueError(
+        f"Unknown seed_strategy: {seed_strategy}. "
+        "Use 'high_outdegree' or 'random'."
+    )
+
+
+def filter_internal_links(
+    documents: Dict[int, KiltDocument],
+) -> Dict[int, KiltDocument]:
+    sampled_ids = set(documents.keys())
+    filtered: Dict[int, KiltDocument] = {}
 
     for doc_id, doc in documents.items():
-        title_to_id[normalize_title(doc.title)] = doc_id
+        filtered[doc_id] = KiltDocument(
+            doc_id=doc.doc_id,
+            title=doc.title,
+            body=doc.body,
+            first_paragraph=doc.first_paragraph,
+            out_links={
+                target_id
+                for target_id in doc.out_links
+                if target_id in sampled_ids and target_id != doc_id
+            },
+        )
 
-    return title_to_id
+    return filtered
 
 
 def sample_by_bfs(
@@ -151,24 +225,17 @@ def sample_by_bfs(
     max_depth: int = 2,
     random_seed: int = 42,
     num_auto_seeds: int = 20,
+    seed_strategy: str = "high_outdegree",
 ) -> Dict[int, KiltDocument]:
-    """
-    Sample a Wikipedia subset using BFS.
-
-    Seeds are automatically selected by internal out-degree among loaded docs.
-    This is suitable for streaming mode because fixed title seeds may not appear
-    in the loaded prefix.
-
-    Edge direction:
-        source document -> linked target document
-    """
-    random.seed(random_seed)
+    rng = random.Random(random_seed)
 
     internal_out_links = compute_internal_out_links(documents)
 
-    seed_ids = select_seed_ids_by_out_degree(
+    seed_ids = select_seed_ids(
         internal_out_links=internal_out_links,
         num_seeds=num_auto_seeds,
+        seed_strategy=seed_strategy,
+        random_seed=random_seed,
     )
 
     if not seed_ids:
@@ -177,8 +244,12 @@ def sample_by_bfs(
             f"Loaded documents: {len(documents)}\n"
             f"Documents with internal out-links: "
             f"{sum(1 for links in internal_out_links.values() if links)}\n"
-            "Try increasing --load-limit or check anchor parsing."
+            "Try increasing --load-limit."
         )
+
+    print(f"Seed strategy: {seed_strategy}")
+    print(f"Selected seeds: {len(seed_ids)}")
+    print(f"First seed IDs: {seed_ids[:10]}")
 
     sampled_ids: Set[int] = set()
     queue: deque[Tuple[int, int]] = deque()
@@ -201,7 +272,7 @@ def sample_by_bfs(
 
         neighbors = list(internal_out_links.get(current_id, set()))
         neighbors = sorted(neighbors)
-        random.shuffle(neighbors)
+        rng.shuffle(neighbors)
 
         for neighbor_id in neighbors:
             if neighbor_id not in sampled_ids:
@@ -215,37 +286,9 @@ def sample_by_bfs(
     return filter_internal_links(sampled_docs)
 
 
-def filter_internal_links(
-    documents: Dict[int, KiltDocument],
-) -> Dict[int, KiltDocument]:
-    """
-    Keep only links whose target document is also in the sampled subset.
-    """
-    sampled_ids = set(documents.keys())
-    filtered: Dict[int, KiltDocument] = {}
-
-    for doc_id, doc in documents.items():
-        filtered[doc_id] = KiltDocument(
-            doc_id=doc.doc_id,
-            title=doc.title,
-            body=doc.body,
-            first_paragraph=doc.first_paragraph,
-            out_links={
-                target_id
-                for target_id in doc.out_links
-                if target_id in sampled_ids and target_id != doc_id
-            },
-        )
-
-    return filtered
-
-
 def build_documents_for_index(
     documents: Dict[int, KiltDocument],
 ) -> Dict[int, Dict[str, str]]:
-    """
-    Convert KILT documents into the format expected by InvertedIndex.add_documents().
-    """
     return {
         doc_id: {
             "title": doc.title,
@@ -258,9 +301,6 @@ def build_documents_for_index(
 def build_edges(
     documents: Dict[int, KiltDocument],
 ) -> List[Tuple[int, int]]:
-    """
-    Return graph edges as (source_doc_id, target_doc_id).
-    """
     edges: List[Tuple[int, int]] = []
 
     for source_id, doc in documents.items():
@@ -272,25 +312,37 @@ def build_edges(
 
 def build_queries_and_relevance(
     documents: Dict[int, KiltDocument],
+    max_queries: Optional[int] = None,
+    random_seed: int = 42,
 ) -> Tuple[Dict[int, str], Dict[int, Set[int]]]:
-
     queries: Dict[int, str] = {}
     relevance: Dict[int, Set[int]] = {}
 
     for doc_id, doc in documents.items():
-
-        # query: title only
         query_text = doc.title.strip()
-
-        # relevance: outlinks only
         rel_docs = set(doc.out_links)
 
-        # outlinks 없으면 skip
+        if not query_text:
+            continue
+
         if not rel_docs:
             continue
 
         queries[doc_id] = query_text
         relevance[doc_id] = rel_docs
+
+    if max_queries is not None and len(queries) > max_queries:
+        rng = random.Random(random_seed)
+        selected_qids = rng.sample(sorted(queries.keys()), max_queries)
+
+        queries = {
+            qid: queries[qid]
+            for qid in selected_qids
+        }
+        relevance = {
+            qid: relevance[qid]
+            for qid in selected_qids
+        }
 
     return queries, relevance
 
@@ -300,13 +352,21 @@ def build_sample_meta(
     target_size: int,
     max_depth: int,
     num_auto_seeds: int,
+    seed_strategy: str,
+    random_seed: int,
+    max_queries: Optional[int],
+    actual_queries: int,
 ) -> Dict[str, Any]:
     return {
-        "sampling_method": "auto_seed_bfs_by_internal_out_degree",
+        "sampling_method": f"auto_seed_bfs_{seed_strategy}",
+        "seed_strategy": seed_strategy,
+        "random_seed": random_seed,
         "target_size": target_size,
         "actual_size": len(documents),
         "max_depth": max_depth,
         "num_auto_seeds": num_auto_seeds,
+        "max_queries": max_queries,
+        "actual_queries": actual_queries,
         "sampled_doc_ids": sorted(documents.keys()),
         "titles": {
             doc_id: doc.title
@@ -323,20 +383,9 @@ def build_kilt_subset(
     load_limit: Optional[int] = None,
     random_seed: int = 42,
     num_auto_seeds: int = 20,
+    seed_strategy: str = "high_outdegree",
+    max_queries: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """
-    End-to-end helper.
-
-    Returns:
-        {
-            "documents": documents_for_index,
-            "raw_documents": sampled KiltDocument dict,
-            "edges": edge list,
-            "queries": query_id -> query text,
-            "relevance": query_id -> set(doc_ids),
-            "meta": sampling metadata
-        }
-    """
     all_docs = load_kilt_documents(records, limit=load_limit)
 
     print(f"Loaded docs: {len(all_docs)}")
@@ -355,6 +404,7 @@ def build_kilt_subset(
         max_depth=max_depth,
         random_seed=random_seed,
         num_auto_seeds=num_auto_seeds,
+        seed_strategy=seed_strategy,
     )
 
     print(f"Sampled docs: {len(sampled_docs)}")
@@ -362,13 +412,26 @@ def build_kilt_subset(
 
     documents_for_index = build_documents_for_index(sampled_docs)
     edges = build_edges(sampled_docs)
-    queries, relevance = build_queries_and_relevance(sampled_docs)
+
+    queries, relevance = build_queries_and_relevance(
+        documents=sampled_docs,
+        max_queries=max_queries,
+        random_seed=random_seed,
+    )
+
     meta = build_sample_meta(
         documents=sampled_docs,
         target_size=target_size,
         max_depth=max_depth,
         num_auto_seeds=num_auto_seeds,
+        seed_strategy=seed_strategy,
+        random_seed=random_seed,
+        max_queries=max_queries,
+        actual_queries=len(queries),
     )
+
+    print(f"Queries: {len(queries)}")
+    print(f"Relevance sets: {len(relevance)}")
 
     return {
         "documents": documents_for_index,
@@ -378,40 +441,3 @@ def build_kilt_subset(
         "relevance": relevance,
         "meta": meta,
     }
-
-def compute_internal_out_links(
-    documents: Dict[int, KiltDocument],
-) -> Dict[int, Set[int]]:
-    """
-    Compute out-links that stay inside the loaded document set.
-    """
-    loaded_ids = set(documents.keys())
-
-    return {
-        doc_id: {
-            target_id
-            for target_id in doc.out_links
-            if target_id in loaded_ids and target_id != doc_id
-        }
-        for doc_id, doc in documents.items()
-    }
-
-
-def select_seed_ids_by_out_degree(
-    internal_out_links: Dict[int, Set[int]],
-    num_seeds: int = 20,
-) -> List[int]:
-    """
-    Select seed documents by internal out-degree.
-    """
-    ranked = sorted(
-        internal_out_links.items(),
-        key=lambda item: len(item[1]),
-        reverse=True,
-    )
-
-    return [
-        doc_id
-        for doc_id, links in ranked[:num_seeds]
-        if len(links) > 0
-    ]
