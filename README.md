@@ -76,7 +76,7 @@ python build.py --dataset cisi --input data/CISI.ALL --output-prefix outputs/cis
 
 #### KILT-Wikipedia (recommended)
 ```bash
-python build.py --dataset kilt --target-size 500 --max-depth 2 --load-limit 100000 --num-auto-seeds 50 --streaming --output-prefix outputs/kilt_500
+python build.py --dataset kilt --streaming
 ```
 
 ---
@@ -98,12 +98,12 @@ python evaluate.py --dataset cisi --model boolean --query-file data/CISI.QRY --r
 
 #### VSM (recommended)
 ```bash
-python evaluate.py --dataset kilt --model vsm --size 500
+python evaluate.py --dataset kilt --model vsm
 ```
 
 #### Boolean Model
 ```bash
-python evlauate.py --dataset kilt --model boolean --size 500
+python evlauate.py --dataset kilt --model boolean
 ```
 
 ---
@@ -129,6 +129,8 @@ python evlauate.py --dataset kilt --model boolean --size 500
 | `--num-auto-seeds` | int | 20 | Number of seed documents (based on out-degree) |
 | `--streaming` | flag | False | Enable streaming mode (avoid full dataset download) |
 | `--random-seed` | int | 42 | Random seed for reproducibility |
+| `--seed-strategy` | str | `high_outdegree` | Seed selection (`high_outdegree`, `random`) |
+| `--max-queries` | int | None | Maximum number of generated queries |
 
 #### Tokenization Options
 
@@ -190,6 +192,9 @@ python evlauate.py --dataset kilt --model boolean --size 500
 | `--size` | int | 500 | Dataset size (used for file prefix) |
 | `--model` | str | `vsm` | Retrieval model (`vsm`, `boolean`) |
 | `--top-k` | int | 10 | Cutoff rank for evaluation |
+| `--prefix` | str | None | Path prefix for dataset artifacts |
+| `--save-csv` | flag | False | Save evaluation results to CSV |
+| `--csv-path` | str | outputs/summary/all_results.csv | CSV output path |
 
 #### VSM Options
 
