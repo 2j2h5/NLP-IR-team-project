@@ -96,7 +96,12 @@ python evaluate.py --dataset cisi --model boolean --query-file data/CISI.QRY --r
 
 ### 3. Evaluate (KILT-Wikipedia)
 
-#### VSM (recommended)
+#### Link-VSM (recommended)
+```bash
+python evaluate.py --dataset kilt --model link-vsm
+```
+
+#### VSM
 ```bash
 python evaluate.py --dataset kilt --model vsm
 ```
