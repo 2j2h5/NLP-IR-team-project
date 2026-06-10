@@ -2,16 +2,17 @@ import argparse
 import csv
 import os
 import pickle
-from typing import Any, Dict, Set
+from typing import Any, Dict, Optional, Set
 
-from ir.preprocessors.tokenizer import Tokenizer
-from ir.indexing.inverted_index import InvertedIndex
-from ir.weighting.tfidf import TFIDFWeighter
-from ir.models.vector_space_model import VectorSpaceModel
-from ir.models.boolean_model import BooleanModel
-from ir.models.link_aware_vsm import LinkAwareVectorSpaceModel
-from ir.graph.link_graph import LinkGraph
 from ir.evaluator.evaluator import Evaluator
+from ir.graph.link_graph import LinkGraph
+from ir.indexing.inverted_index import InvertedIndex
+from ir.models.boolean_model import BooleanModel
+from ir.models.intention_aware_vsm import IntentionAwareVectorSpaceModel
+from ir.models.link_aware_vsm import LinkAwareVectorSpaceModel
+from ir.models.vector_space_model import VectorSpaceModel
+from ir.preprocessors.tokenizer import Tokenizer
+from ir.weighting.tfidf import TFIDFWeighter
 
 
 def load_pickle(path: str) -> Any:
@@ -42,6 +43,9 @@ def append_csv(csv_path: str, row: Dict[str, Any]) -> None:
         "top_k",
         "link_score",
         "alpha",
+        "intent_k",
+        "temperature",
+        "embedding_model",
         "seed_strategy",
         "random_seed",
         "num_docs",
@@ -78,9 +82,14 @@ def build_model(
     remove_numbers: bool = False,
     remove_stopwords: bool = False,
     min_token_length: int = 1,
-    graph: LinkGraph = None,
+    graph: Optional[LinkGraph] = None,
     link_score: str = "pagerank",
     alpha: float = 0.8,
+    paragraph_embeddings: Optional[Dict[int, Any]] = None,
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
+    intent_k: int = 3,
+    temperature: float = 0.1,
+    normalize_scores: bool = True,
 ):
     tokenizer = Tokenizer(
         lowercase=True,
@@ -130,6 +139,29 @@ def build_model(
             alpha=alpha,
         )
 
+    elif model_name == "intention-vsm":
+        if paragraph_embeddings is None:
+            raise ValueError("intention-vsm requires paragraph embeddings.")
+
+        weighter = TFIDFWeighter(
+            title_weight=title_weight,
+            body_weight=body_weight,
+            use_log_tf=use_log_tf,
+            smooth_idf=smooth_idf,
+        )
+
+        model = IntentionAwareVectorSpaceModel(
+            index=index,
+            tokenizer=tokenizer,
+            weighter=weighter,
+            paragraph_embeddings=paragraph_embeddings,
+            embedding_model_name=embedding_model,
+            alpha=alpha,
+            intent_k=intent_k,
+            temperature=temperature,
+            normalize_scores=normalize_scores,
+        )
+
     else:
         raise ValueError(f"Unsupported model: {model_name}")
 
@@ -142,8 +174,11 @@ def print_summary(
     model_name: str,
     dataset: str,
     k: int,
-    link_score: str = None,
-    alpha: float = None,
+    link_score: Optional[str] = None,
+    alpha: Optional[float] = None,
+    intent_k: Optional[int] = None,
+    temperature: Optional[float] = None,
+    embedding_model: Optional[str] = None,
 ) -> None:
     print("\n" + "=" * 72)
     print("Final Evaluation Summary")
@@ -154,6 +189,12 @@ def print_summary(
     if model_name == "link-vsm":
         print(f"Link score: {link_score}")
         print(f"Alpha: {alpha}")
+
+    if model_name == "intention-vsm":
+        print(f"Alpha: {alpha}")
+        print(f"Intent top-k: {intent_k}")
+        print(f"Temperature: {temperature}")
+        print(f"Embedding model: {embedding_model}")
 
     print(f"Number of queries: {results['num_queries']}")
     print(f"Mean Precision@{k}: {results[f'mean_precision@{k}']:.4f}")
@@ -179,10 +220,11 @@ def main() -> None:
     parser.add_argument("--queries", type=str, default=None)
     parser.add_argument("--relevance", type=str, default=None)
     parser.add_argument("--graph", type=str, default=None)
+    parser.add_argument("--paragraph-embeddings", type=str, default=None)
 
     parser.add_argument(
         "--model",
-        choices=["vsm", "boolean", "link-vsm"],
+        choices=["vsm", "boolean", "link-vsm", "intention-vsm"],
         default="vsm",
     )
     parser.add_argument("--top-k", type=int, default=10)
@@ -192,7 +234,30 @@ def main() -> None:
         choices=["indegree", "pagerank"],
         default="pagerank",
     )
-    parser.add_argument("--alpha", type=float, default=0.8)
+
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=0.8,
+        help=(
+            "Interpolation weight. "
+            "For link-vsm: alpha*S_text + (1-alpha)*S_link. "
+            "For intention-vsm: alpha*S_text + (1-alpha)*S_intention."
+        ),
+    )
+
+    parser.add_argument("--intent-k", type=int, default=3)
+    parser.add_argument("--temperature", type=float, default=0.1)
+    parser.add_argument(
+        "--embedding-model",
+        type=str,
+        default="sentence-transformers/all-MiniLM-L6-v2",
+    )
+    parser.add_argument(
+        "--no-normalize-scores",
+        action="store_true",
+        help="Disable query-level min-max normalization before interpolation.",
+    )
 
     parser.add_argument("--title-weight", type=float, default=2.0)
     parser.add_argument("--body-weight", type=float, default=1.0)
@@ -205,7 +270,6 @@ def main() -> None:
 
     parser.add_argument("--quiet", action="store_true")
 
-    # CSV 저장 옵션
     parser.add_argument("--save-csv", action="store_true")
     parser.add_argument(
         "--csv-path",
@@ -213,7 +277,6 @@ def main() -> None:
         default="outputs/summary/all_results.csv",
     )
 
-    # 실험 메타데이터
     parser.add_argument(
         "--seed-strategy",
         type=str,
@@ -226,6 +289,10 @@ def main() -> None:
 
     if not 0.0 <= args.alpha <= 1.0:
         raise ValueError("--alpha must be between 0 and 1.")
+    if args.intent_k <= 0:
+        raise ValueError("--intent-k must be positive.")
+    if args.temperature <= 0.0:
+        raise ValueError("--temperature must be positive.")
 
     prefix = args.prefix or get_default_prefix(args.dataset, args.size)
 
@@ -233,6 +300,10 @@ def main() -> None:
     queries_path = args.queries or f"{prefix}_queries.pkl"
     relevance_path = args.relevance or f"{prefix}_relevance.pkl"
     graph_path = args.graph or f"{prefix}_graph.pkl"
+    paragraph_embeddings_path = (
+        args.paragraph_embeddings
+        or f"{prefix}_paragraph_embeddings.pkl"
+    )
 
     print(f"Dataset        : {args.dataset}")
     print(f"Artifact prefix: {prefix}")
@@ -244,6 +315,14 @@ def main() -> None:
         print(f"Graph path     : {graph_path}")
         print(f"Link score     : {args.link_score}")
         print(f"Alpha          : {args.alpha}")
+
+    if args.model == "intention-vsm":
+        print(f"Para emb path  : {paragraph_embeddings_path}")
+        print(f"Alpha          : {args.alpha}")
+        print(f"Intent top-k   : {args.intent_k}")
+        print(f"Temperature    : {args.temperature}")
+        print(f"Embedding model: {args.embedding_model}")
+        print(f"Normalize score: {not args.no_normalize_scores}")
 
     print("Loading index...")
     index = load_index(index_path)
@@ -260,6 +339,12 @@ def main() -> None:
         print(f"Graph nodes     : {graph.num_nodes()}")
         print(f"Graph edges     : {graph.num_edges()}")
 
+    paragraph_embeddings = None
+    if args.model == "intention-vsm":
+        print("Loading paragraph embeddings...")
+        paragraph_embeddings = load_pickle(paragraph_embeddings_path)
+        print(f"Paragraph docs  : {len(paragraph_embeddings)}")
+
     print(f"Building model: {args.model}")
     model = build_model(
         model_name=args.model,
@@ -274,6 +359,11 @@ def main() -> None:
         graph=graph,
         link_score=args.link_score,
         alpha=args.alpha,
+        paragraph_embeddings=paragraph_embeddings,
+        embedding_model=args.embedding_model,
+        intent_k=args.intent_k,
+        temperature=args.temperature,
+        normalize_scores=not args.no_normalize_scores,
     )
 
     print(f"Indexed documents : {len(index)}")
@@ -297,6 +387,9 @@ def main() -> None:
         k=args.top_k,
         link_score=args.link_score,
         alpha=args.alpha,
+        intent_k=args.intent_k,
+        temperature=args.temperature,
+        embedding_model=args.embedding_model,
     )
 
     if args.save_csv:
@@ -308,7 +401,12 @@ def main() -> None:
             "prefix": prefix,
             "top_k": k,
             "link_score": args.link_score if args.model == "link-vsm" else "",
-            "alpha": args.alpha if args.model == "link-vsm" else "",
+            "alpha": args.alpha if args.model in {"link-vsm", "intention-vsm"} else "",
+            "intent_k": args.intent_k if args.model == "intention-vsm" else "",
+            "temperature": args.temperature if args.model == "intention-vsm" else "",
+            "embedding_model": (
+                args.embedding_model if args.model == "intention-vsm" else ""
+            ),
             "seed_strategy": args.seed_strategy,
             "random_seed": args.random_seed,
             "num_docs": len(index),

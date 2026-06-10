@@ -12,6 +12,7 @@ class KiltDocument:
     title: str
     body: str
     first_paragraph: str
+    paragraphs: List[str]
     out_links: Set[int]
 
 
@@ -98,6 +99,7 @@ def extract_document(record: Dict[str, Any]) -> Optional[KiltDocument]:
         title=title.strip(),
         body=body,
         first_paragraph=first_paragraph,
+        paragraphs=paragraphs,
         out_links=out_links,
     )
 
@@ -209,6 +211,7 @@ def filter_internal_links(
             title=doc.title,
             body=doc.body,
             first_paragraph=doc.first_paragraph,
+            paragraphs=doc.paragraphs,
             out_links={
                 target_id
                 for target_id in doc.out_links
@@ -294,6 +297,15 @@ def build_documents_for_index(
             "title": doc.title,
             "body": doc.body,
         }
+        for doc_id, doc in documents.items()
+    }
+
+
+def build_paragraphs_for_intention(
+    documents: Dict[int, KiltDocument],
+) -> Dict[int, List[str]]:
+    return {
+        doc_id: doc.paragraphs
         for doc_id, doc in documents.items()
     }
 
@@ -411,6 +423,7 @@ def build_kilt_subset(
     print(f"Internal edges: {len(build_edges(sampled_docs))}")
 
     documents_for_index = build_documents_for_index(sampled_docs)
+    paragraphs = build_paragraphs_for_intention(sampled_docs)
     edges = build_edges(sampled_docs)
 
     queries, relevance = build_queries_and_relevance(
@@ -435,6 +448,7 @@ def build_kilt_subset(
 
     return {
         "documents": documents_for_index,
+        "paragraphs": paragraphs,
         "raw_documents": sampled_docs,
         "edges": edges,
         "queries": queries,

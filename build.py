@@ -104,6 +104,7 @@ def build_kilt(args: argparse.Namespace) -> None:
     )
 
     documents = subset["documents"]
+    paragraphs = subset["paragraphs"]
     edges = subset["edges"]
     queries = subset["queries"]
     relevance = subset["relevance"]
@@ -120,6 +121,7 @@ def build_kilt(args: argparse.Namespace) -> None:
     prefix = args.output_prefix or f"outputs/kilt_{args.target_size}"
 
     save_pickle(index.to_dict(), f"{prefix}_index.pkl")
+    save_pickle(paragraphs, f"{prefix}_paragraphs.pkl")
     save_pickle(edges, f"{prefix}_graph.pkl")
     save_pickle(queries, f"{prefix}_queries.pkl")
     save_pickle(relevance, f"{prefix}_relevance.pkl")
@@ -128,6 +130,7 @@ def build_kilt(args: argparse.Namespace) -> None:
     print("KILT build completed.")
     print(f"Documents       : {len(index)}")
     print(f"Vocabulary size : {len(index.vocabulary())}")
+    print(f"Paragraph docs  : {len(paragraphs)}")
     print(f"Edges           : {len(edges)}")
     print(f"Queries         : {len(queries)}")
     print(f"Relevance sets  : {len(relevance)}")
