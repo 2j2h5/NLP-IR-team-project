@@ -19,24 +19,36 @@ def save_pickle(obj: Any, path: str) -> None:
         pickle.dump(obj, f)
 
 
-def filter_paragraphs(
-    paragraphs: List[str],
-    min_words: int,
-) -> List[str]:
-    filtered: List[str] = []
+def filter_paragraphs(paragraphs, min_words=20):
+    filtered = []
 
-    for paragraph in paragraphs:
-        if not isinstance(paragraph, str):
+    stop_sections = {
+        "Section::::See also.",
+        "Section::::Sources.",
+        "Section::::External links.",
+        "Section::::References.",
+        "Section::::Bibliography.",
+    }
+
+    for p in paragraphs:
+        p = p.strip()
+
+        if not p:
             continue
 
-        text = paragraph.strip()
-        if not text:
+        if p in stop_sections:
+            break
+
+        if p.startswith("Section::::"):
             continue
 
-        if len(text.split()) < min_words:
+        if p.startswith("BULLET::::"):
             continue
 
-        filtered.append(text)
+        if len(p.split()) < min_words:
+            continue
+
+        filtered.append(p)
 
     return filtered
 
