@@ -373,12 +373,21 @@ def main() -> None:
     print(f"Evaluating at k   : {args.top_k}")
 
     evaluator = Evaluator(model)
-    results = evaluator.evaluate_all(
-        queries=queries,
-        relevance_judgments=relevance,
-        k=args.top_k,
-        verbose=not args.quiet,
-    )
+
+    if args.model == "intention-vsm":
+        results = evaluator.evaluate_all_with_previous_queries(
+            queries=queries,
+            relevance_judgments=relevance,
+            k=args.top_k,
+            verbose=not args.quiet,
+        )
+    else:
+        results = evaluator.evaluate_all(
+            queries=queries,
+            relevance_judgments=relevance,
+            k=args.top_k,
+            verbose=not args.quiet,
+        )
 
     print_summary(
         results=results,

@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 import random
+import re
 
 
 @dataclass
@@ -321,6 +322,76 @@ def build_edges(
 
     return edges
 
+def extract_first_content_sentence(doc: KiltDocument) -> str:
+    paragraphs = doc.paragraphs
+
+    if not paragraphs:
+        return doc.title.strip()
+
+    # paragraph 1 is often the title in KILT-Wikipedia.
+    candidate_paragraphs = paragraphs[1:] if len(paragraphs) > 1 else paragraphs
+
+    for paragraph in candidate_paragraphs:
+        text = paragraph.strip()
+
+        if not text:
+            continue
+
+        if text.startswith("Section::::"):
+            continue
+
+        if text.startswith("BULLET::::"):
+            continue
+
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if sentence:
+                return sentence
+
+    return doc.title.strip()
+
+def extract_content_sentences(
+    doc: KiltDocument,
+    max_sentences: int = 3,
+) -> List[str]:
+    paragraphs = doc.paragraphs
+
+    if not paragraphs:
+        return []
+
+    # paragraph 1 is often title
+    candidate_paragraphs = paragraphs[1:] if len(paragraphs) > 1 else paragraphs
+
+    sentences: List[str] = []
+
+    for paragraph in candidate_paragraphs:
+        text = paragraph.strip()
+
+        if not text:
+            continue
+
+        if text.startswith("Section::::"):
+            continue
+
+        if text.startswith("BULLET::::"):
+            continue
+
+        split_sentences = re.split(r"(?<=[.!?])\s+", text)
+
+        for sentence in split_sentences:
+            sentence = sentence.strip()
+
+            if not sentence:
+                continue
+
+            sentences.append(sentence)
+
+            if len(sentences) >= max_sentences:
+                return sentences
+
+    return sentences
 
 def build_queries_and_relevance(
     documents: Dict[int, KiltDocument],
@@ -331,17 +402,29 @@ def build_queries_and_relevance(
     relevance: Dict[int, Set[int]] = {}
 
     for doc_id, doc in documents.items():
-        query_text = doc.title.strip()
         rel_docs = set(doc.out_links)
-
-        if not query_text:
-            continue
 
         if not rel_docs:
             continue
 
-        queries[doc_id] = query_text
-        relevance[doc_id] = rel_docs
+        sentences = extract_content_sentences(doc, max_sentences=3)
+
+        if not sentences:
+            continue
+
+        cumulative_query = ""
+
+        for step, sentence in enumerate(sentences, start=1):
+            cumulative_query = (
+                sentence
+                if step == 1
+                else cumulative_query + " " + sentence
+            )
+
+            qid = doc_id * 10 + step
+
+            queries[qid] = cumulative_query
+            relevance[qid] = rel_docs
 
     if max_queries is not None and len(queries) > max_queries:
         rng = random.Random(random_seed)

@@ -58,6 +58,7 @@ class IntentionAwareVectorSpaceModel:
         self,
         query: str,
         top_k: int = 10,
+        previous_query: str = None,
     ) -> List[Tuple[int, float]]:
         text_results = self.vsm.search(
             query=query,
@@ -69,7 +70,10 @@ class IntentionAwareVectorSpaceModel:
             for doc_id, score in text_results
         }
 
-        query_intent = self._build_query_intent_vector(query)
+        query_intent = self._build_query_intent_vector(
+            query=query,    
+            previous_query=previous_query,
+        )
 
         intent_scores = {
             doc_id: self._intention_score(query_intent, doc_id)
@@ -99,19 +103,34 @@ class IntentionAwareVectorSpaceModel:
 
         return ranked_results[:top_k]
 
-    def _build_query_intent_vector(self, query: str) -> np.ndarray:
-        embedding = self.embedding_model.encode(
+    def _build_query_intent_vector(
+        self,
+        query: str,
+        previous_query: str = None,
+    ) -> np.ndarray:
+        query_embedding = self.embedding_model.encode(
             query,
             convert_to_numpy=True,
             normalize_embeddings=True,
             show_progress_bar=False,
         )
 
-        embedding = np.asarray(embedding, dtype=np.float32)
+        query_embedding = np.asarray(query_embedding, dtype=np.float32)
 
-        # 현재 단일 쿼리 실험:
-        # q_intent = normalize(q - 0) = normalize(q)
-        return self._normalize_dense_or_zero(embedding)
+        if previous_query is None:
+            return self._normalize_dense_or_zero(query_embedding)
+
+        previous_embedding = self.embedding_model.encode(
+            previous_query,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+
+        previous_embedding = np.asarray(previous_embedding, dtype=np.float32)
+
+        direction = query_embedding - previous_embedding
+        return self._normalize_dense_or_zero(direction)
 
     def _build_document_intent_vectors(self) -> Dict[int, np.ndarray]:
         result: Dict[int, np.ndarray] = {}
