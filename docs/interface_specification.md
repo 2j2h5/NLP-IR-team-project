@@ -4,15 +4,18 @@
 
 ## Overview
 
-The system is composed of the following interchangeable components:
+The system consists of interchangeable retrieval components that follow common interface contracts.
+
+Core components:
 
 - Tokenizer
 - InvertedIndex
 - Weighter
+- IntentEstimator
 - RetrievalModel
 - Evaluator
 
-Each component follows a minimal interface contract.
+The purpose of these interfaces is to allow multiple retrieval approaches (Boolean, VSM, Link-VSM, Intent-VSM) to share the same infrastructure.
 
 ---
 
@@ -20,7 +23,7 @@ Each component follows a minimal interface contract.
 
 ### Purpose
 
-Convert raw text into tokens.
+Convert raw text into normalized tokens.
 
 ### Interface
 
@@ -30,8 +33,8 @@ tokenize(text: str) -> list[str]
 
 ### Notes
 
-- Used in both indexing and query processing
-- Must apply the same normalization for documents and queries
+- Used for both documents and queries
+- Must apply consistent preprocessing
 
 ---
 
@@ -39,7 +42,7 @@ tokenize(text: str) -> list[str]
 
 ### Purpose
 
-Store and retrieve term-based document information.
+Store and retrieve document statistics.
 
 ### Interface
 
@@ -56,8 +59,8 @@ get_document(doc_id: int) -> dict[str, str]
 
 ### Notes
 
-- Provides all data required for weighting and retrieval
-- Field-aware (title/body)
+- Field-aware indexing
+- Supports title and body statistics
 
 ---
 
@@ -70,14 +73,56 @@ Convert term frequencies into weighted vectors.
 ### Interface
 
 ```python
-document_vector(doc_id: int, index) -> dict[str, float]
-query_vector(query_term_counts: dict[str, int], index) -> dict[str, float]
+document_vector(
+    doc_id: int,
+    index
+) -> dict[str, float]
+
+query_vector(
+    query_term_counts: dict[str, int],
+    index
+) -> dict[str, float]
 ```
 
 ### Notes
 
-- Used in ranked retrieval models only
-- Examples: TF-IDF, BM25
+Examples:
+
+- TF-IDF
+- Future BM25 extensions
+
+---
+
+## IntentEstimator
+
+### Purpose
+
+Estimate user intent from semantic query relationships.
+
+### Interface
+
+```python
+build() -> None
+
+embed_query(
+    query: str
+)
+
+retrieve_similar_queries(
+    query: str,
+    top_k: int
+)
+
+construct_intent_vector(
+    query: str
+)
+```
+
+### Notes
+
+- Used only by Intent-VSM
+- May use sentence embeddings
+- May incorporate neighboring query information
 
 ---
 
@@ -91,20 +136,30 @@ Retrieve documents for a given query.
 
 ```python
 build() -> None
-search(query: str, top_k: int = 10) -> list[tuple[int, float]]
+
+search(
+    query: str,
+    top_k: int = 10
+) -> list[tuple[int, float]]
 ```
 
 ### Optional Interface
 
 ```python
-explain(query: str, doc_id: int) -> dict[str, float]
+explain(
+    query: str,
+    doc_id: int
+) -> dict[str, float]
 ```
 
 ### Notes
 
-- `build()` prepares internal structures (e.g., document vectors)
-- `search()` must return ranked results
-- All models must support the same search interface
+Supported implementations:
+
+- Boolean Model
+- Vector Space Model
+- Link-VSM
+- Intent-VSM
 
 ---
 
@@ -112,7 +167,7 @@ explain(query: str, doc_id: int) -> dict[str, float]
 
 ### Purpose
 
-Evaluate retrieval performance.
+Evaluate retrieval effectiveness.
 
 ### Interface
 
@@ -122,7 +177,9 @@ evaluate_query(
     relevant_docs: set[int],
     k: int = 10
 ) -> dict[str, float]
+```
 
+```python
 evaluate_all(
     queries: dict[int, str],
     relevance: dict[int, set[int]],
@@ -131,5 +188,13 @@ evaluate_all(
 ```
 
 ### Notes
-- Assumes the model implements `search(query, top_k)`
-- Computes metrics such as Precision, Recall, MAP
+
+Supported metrics:
+
+- Precision
+- Recall
+- F-score
+- Average Precision
+- Mean Average Precision
+
+All retrieval models must expose a compatible search interface.
