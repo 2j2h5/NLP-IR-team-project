@@ -6,7 +6,11 @@
 
 This project implements and evaluates Information Retrieval (IR) models on both the CISI dataset and a sampled subset of KILT-Wikipedia.
 
-The main goal is to extend classic IR models (Boolean, Vector Space Model) by incorporating document link structure and evaluating their performance.
+The project initially focused on traditional retrieval approaches such as the Boolean Model, Vector Space Model (VSM), and Link-VSM, which incorporates hyperlink information between documents.
+
+The current research direction extends beyond document link structures and investigates **Intent-VSM**, an intent-aware retrieval framework that utilizes semantic query representations and inferred user intent to improve retrieval performance.
+
+The primary goal of the project is to compare traditional retrieval methods and intent-aware retrieval approaches under a unified evaluation framework.
 
 ---
 
@@ -15,35 +19,64 @@ The main goal is to extend classic IR models (Boolean, Vector Space Model) by in
 - [Architecture](docs/architecture.md)
 - [Interface Specification](docs/interface_specification.md)
 
+---
+
 ## Dataset
-- [CISI Dataset (Kaggle)](https://www.kaggle.com/datasets/dmaso01dsta/cisi-a-dataset-for-information-retrieval)
-- [KILT-Wikipedia (Kaggle)](https://huggingface.co/datasets/facebook/kilt_wikipedia)
-- [English Stopwords (Kaggle)](https://www.kaggle.com/datasets/amirhoseinsedaghati/english-stopwords)
+
+- CISI Dataset
+- KILT-Wikipedia
+- English Stopwords
+
+### CISI Dataset
+
+Classical Information Retrieval benchmark dataset used for baseline experiments.
+
+### KILT-Wikipedia
+
+Large-scale Wikipedia dataset containing document hyperlinks.
+
+Used for:
+
+- Link-VSM experiments
+- Intent-VSM experiments
+- Large-scale retrieval evaluation
 
 ---
 
 ## What This Project Does
 
-- Builds a field-aware inverted index (title and body)
+### Classical Retrieval
+
+- Builds a field-aware inverted index
 - Tokenizes and preprocesses documents and queries
-- Computes TF-IDF weights for documents and queries
+- Computes TF-IDF weights
 - Performs retrieval using:
   - Boolean Model
-  - Vector Space Model (cosine similarity)
-- Retrieves top-k relevant documents
-- Evaluates performance using:
-  - Precision@k
-  - Recall@k
-  - Average Precision (AP)
-  - Mean Average Precision (MAP)
+  - Vector Space Model (VSM)
 
-### Additional (KILT-Wikipedia)
+### Link-Based Retrieval
 
-- Streams large-scale Wikipedia dataset without full download
-- Constructs internal hyperlink graph between documents
-- Automatically selects seed documents based on out-degree
-- Samples connected document subset using BFS
-- Generates synthetic query/relevance pairs for evaluation
+- Constructs hyperlink graphs
+- Computes Indegree scores
+- Computes PageRank scores
+- Combines text similarity and link importance
+- Evaluates Link-VSM performance
+
+### Intent-Aware Retrieval
+
+- Generates semantic query embeddings
+- Searches for semantically related queries
+- Constructs intent representations
+- Combines query information and inferred intent
+- Evaluates Intent-VSM performance
+
+### Evaluation
+
+- Precision@k
+- Recall@k
+- Average Precision (AP)
+- Mean Average Precision (MAP)
+- F-score variants
 
 ---
 
@@ -51,20 +84,23 @@ The main goal is to extend classic IR models (Boolean, Vector Space Model) by in
 
 ### Requirements (KILT-Wikipedia)
 
-To use the KILT_Wikipedia dataset:
+To use the KILT-Wikipedia dataset:
+
 - Python 3.11 is recommended
-- Hugging Face datasets may not work properly with newer versions (e.g., Python 3.14)
+- Hugging Face datasets may not work properly with newer Python versions
 - Use a virtual environment
 
 ```bash
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+
 pip install "datasets<4.0.0"
 pip install numpy nltk
 ```
 
-- The full KILT-Wikipedia dataset is ~66GB
-- You should use ```--streaming``` to avoid downloading the entire dataset
+For Intent-VSM experiments, additional embedding-related packages may be required depending on the current implementation.
+
+---
 
 ### 1. Build Dataset
 
@@ -74,20 +110,24 @@ pip install numpy nltk
 python build.py --dataset cisi --input data/CISI.ALL --output-prefix outputs/cisi
 ```
 
-#### KILT-Wikipedia (recommended)
+#### KILT-Wikipedia
+
 ```bash
-python build.py --dataset kilt --streaming
+python build.py --dataset kilt --target-size 500 --max-depth 2 --load-limit 100000 --num-auto-seeds 30 --max-queries 100 --streaming 
 ```
 
 ---
 
 ### 2. Evaluate (CISI)
 
-#### VSM (recommended)
+#### VSM
+
 ```bash
 python evaluate.py --dataset cisi --model vsm --query-file data/CISI.QRY --rel-file data/CISI.REL
 ```
+
 #### Boolean Model
+
 ```bash
 python evaluate.py --dataset cisi --model boolean --query-file data/CISI.QRY --rel-file data/CISI.REL
 ```
@@ -96,19 +136,22 @@ python evaluate.py --dataset cisi --model boolean --query-file data/CISI.QRY --r
 
 ### 3. Evaluate (KILT-Wikipedia)
 
-#### Link-VSM (recommended)
+#### Link-VSM
+
 ```bash
 python evaluate.py --dataset kilt --model link-vsm
 ```
 
 #### VSM
+
 ```bash
 python evaluate.py --dataset kilt --model vsm
 ```
 
 #### Boolean Model
+
 ```bash
-python evlauate.py --dataset kilt --model boolean
+python evaluate.py --dataset kilt --model boolean
 ```
 
 ---
@@ -122,184 +165,120 @@ python evlauate.py --dataset kilt --model boolean
 | Option | Type | Description |
 |------|------|------------|
 | `--dataset` | str | Dataset to build (`cisi`, `kilt`) |
-| `--output-prefix` | str | Output file prefix (e.g., `outputs/kilt_500`) |
+| `--output-prefix` | str | Output file prefix |
 
 #### KILT Options
 
 | Option | Type | Default | Description |
 |------|------|--------|------------|
-| `--target-size` | int | 500 | Target number of sampled documents (upper bound) |
-| `--max-depth` | int | 2 | BFS depth for sampling |
-| `--load-limit` | int | None | Number of streamed documents to load |
-| `--num-auto-seeds` | int | 20 | Number of seed documents (based on out-degree) |
-| `--streaming` | flag | False | Enable streaming mode (avoid full dataset download) |
-| `--random-seed` | int | 42 | Random seed for reproducibility |
-| `--seed-strategy` | str | `high_outdegree` | Seed selection (`high_outdegree`, `random`) |
-| `--max-queries` | int | None | Maximum number of generated queries |
-
-#### Tokenization Options
-
-| Option | Type | Description |
-|------|------|------------|
-| `--remove-numbers` | flag | Remove numeric tokens |
-| `--remove-stopwords` | flag | Remove stopwords |
-| `--min-token-length` | int | Minimum token length |
+| `--target-size` | int | 500 | Target number of sampled documents |
+| `--max-depth` | int | 2 | BFS depth |
+| `--load-limit` | int | None | Number of streamed documents |
+| `--num-auto-seeds` | int | 20 | Number of seed documents |
+| `--streaming` | flag | False | Enable streaming mode |
+| `--random-seed` | int | 42 | Random seed |
+| `--seed-strategy` | str | high_outdegree | Seed selection strategy |
+| `--max-queries` | int | None | Maximum generated queries |
 
 ---
 
 ### run_query.py
 
-#### Common Opotions
+#### Common Options
 
 | Option | Type | Default | Description |
 |------|------|--------|------------|
-| `--model` | str | `vsm` | Retrieval model (`vsm`, `boolean`) |
-| `--index` | str | required | Path to index pickle file |
-| `--query` | str | None | Direct query string |
-| `--query-file` | str | None | Path to query file (e.g., CISI.QRY) |
-| `--query-id` | int | None | Specific query ID from query file |
-| `--random-query` | flag | False | Select a random query from query file |
-| `--top-k` | int | 10 | Number of top results to return |
-
-#### VSM Options
-
-| Option | Type | Default | Description |
-|------|------|--------|------------|
-| `--title-weight` | float | 2.0 | Weight for title field |
-| `--body-weight` | float | 1.0 | Weight for body field |
-| `--no-log-tf` | flag | False | Disable log-scaled TF |
-| `--no-smooth-idf` | flag | False | Disable smoothed IDF |
-
-#### Tokenization Options
-
-| Option | Type | Description |
-|------|------|------------|
-| `--remove-numbers` | flag | Remove numeric tokens |
-| `--remove-stopwords` | flag | Remove stopwords |
-| `--min-token-length` | int | Minimum token length |
-
-#### Output Options
-
-| Option | Type | Description |
-|------|------|------------|
-| `--explain` | flag | Show term-level contribution (VSM only) |
-| `--show-body` | flag | Display document body snippet |
+| `--model` | str | vsm | Retrieval model |
+| `--index` | str | required | Path to index file |
+| `--query` | str | None | Query string |
+| `--query-file` | str | None | Query file |
+| `--query-id` | int | None | Query identifier |
+| `--random-query` | flag | False | Random query selection |
+| `--top-k` | int | 10 | Number of returned documents |
 
 ---
 
 ### evaluate.py
 
-#### Common Opotions
+#### Common Options
 
 | Option | Type | Default | Description |
 |------|------|--------|------------|
-| `--dataset` | str | `cisi` | Dataset to evaluate (`cisi`, `kilt`) |
-| `--size` | int | 500 | Dataset size (used for file prefix) |
-| `--model` | str | `vsm` | Retrieval model (`vsm`, `boolean`) |
-| `--top-k` | int | 10 | Cutoff rank for evaluation |
-| `--prefix` | str | None | Path prefix for dataset artifacts |
-| `--save-csv` | flag | False | Save evaluation results to CSV |
-| `--csv-path` | str | outputs/summary/all_results.csv | CSV output path |
-
-#### VSM Options
-
-| Option | Type | Default | Description |
-|------|------|--------|------------|
-| `--title-weight` | float | 2.0 | Weight for title field |
-| `--body-weight` | float | 1.0 | Weight for body field |
-| `--no-log-tf` | flag | False | Disable log-scaled TF |
-| `--no-smooth-idf` | flag | False | Disable smoothed IDF |
-
-#### Tokenization Options (Query)
-
-| Option | Type | Description |
-|------|------|------------|
-| `--remove-numbers` | flag | Remove numeric tokens |
-| `--remove-stopwords` | flag | Remove stopwords |
-| `--min-token-length` | int | Minimum token length |
+| `--dataset` | str | cisi | Dataset to evaluate |
+| `--size` | int | 500 | Dataset size |
+| `--model` | str | vsm | Retrieval model |
+| `--top-k` | int | 10 | Evaluation cutoff |
+| `--prefix` | str | None | Dataset prefix |
+| `--save-csv` | flag | False | Save results |
+| `--csv-path` | str | outputs/summary/all_results.csv | CSV path |
 
 ---
 
 ## Project Structure
+
 ```text
 .
 ├── build.py
 ├── run_query.py
 ├── evaluate.py
+├── build_paragraph_embeddings.py
+├── data/
+│   ├── CISI.ALL
+│   ├── CISI.QRY
+│   ├── CISI.REL
+│   └── stopwords.txt
 ├── docs/
 │   ├── architecture.md
 │   └── interface_specification.md
 ├── ir/
 │   ├── datasets/
-│   │   ├── cisi.py
-│   │   └── kilt_wikipedia.py
-│   ├── preprocessors/
-│   │   └── tokenizer.py
+│   ├── evaluator/
+│   ├── graph/
 │   ├── indexing/
-│   │   └── inverted_index.py
-│   ├── weighting/
-│   │   └── tfidf.py
 │   ├── models/
-│   │   ├── vector_space_model.py
-│   │   └── boolean_model.py
-│   └── evaluator/
-│       ├── metrics.py
-│       └── evaluator.py
-├── outputs/
+│   ├── preprocessors/
+│   └── weighting/
 ```
 
 ---
 
 ## Pipeline
+
 ```mermaid
 flowchart TD
-    subgraph Build_Phase["Build Phase"]
-        docs["Documents"]
-        tokenizer1["Tokenizer"]
-        index["InvertedIndex"]
 
-        docs --> tokenizer1
-        tokenizer1 --> index
-    end
+    Query["Query"]
+    Preprocess["Tokenizer / Preprocessing"]
+    Representation["Representation"]
+    Retrieval["Retrieval Model"]
+    Ranking["Document Ranking"]
+    Evaluation["Evaluation"]
 
-    subgraph Retrieval_Phase["Retrieval Phase"]
-        query["Query"]
-        tokenizer2["Tokenizer"]
-        weighter["Weighter (Optional)"]
-        model["RetrievalModel"]
-
-        query --> tokenizer2
-        tokenizer2 --> weighter
-        index --> weighter
-        weighter --> model
-        index --> model
-    end
-
-    subgraph Evaluation_Phase["Evaluation Phase"]
-        relevance["Relevant Documents"]
-        evaluator["Evaluator"]
-
-        model --> evaluator
-        relevance --> evaluator
-    end
+    Query --> Preprocess
+    Preprocess --> Representation
+    Representation --> Retrieval
+    Retrieval --> Ranking
+    Ranking --> Evaluation
 ```
-During the build phase, documents are tokenized and indexed using an inverted index.
-In the retrieval phase, queries are processed and ranked using a TF-IDF based Vector Space Model.
-Finally, the evaluation phase measures retrieval performance using metrics such as Precision, Recall, and MAP.
+
+The retrieval stage may be implemented using Boolean retrieval, VSM, Link-VSM, or Intent-VSM depending on the experiment.
 
 ---
 
 ## Future Work
 
-- Stemming / lemmatization
 - BM25 ranking model
-- Query expansion techniques
-- Hyperparameter tuning (title/body weighting)
-- Learning-to-rank approaches
-- Semantic retrieval (e.g., embeddings, neural IR)
+- Query expansion
+- Hybrid sparse-dense retrieval
+- Improved intent estimation
+- Intent-aware ranking optimization
+- Retrieval-Augmented Generation (RAG)
+- Personalized retrieval
+- Semantic interpretation of embedding spaces
 
 ---
 
 ## Author
-- Lee Jiho - [2j2h5](https://github.com/2j2h5)
-- Choi Junwon - [junwon4158](https://github.com/junwon4158)
+
+- Lee Jiho - https://github.com/2j2h5
+- Choi Junwon - https://github.com/junwon4158
